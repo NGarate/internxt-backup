@@ -3,21 +3,25 @@
  * Handles the caching of file hashes to detect changes
  */
 
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-import { Verbosity, verbose as logVerbose, error as logError } from '../../utils/logger';
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { Verbosity, verbose as logVerbose, error as logError } from "../../utils/logger";
 
 /**
  * HashCache class to manage file hash caching
  */
 export class HashCache {
+  cachePath: string;
+  verbosity: number;
+  cache: Map<string, string>;
+
   /**
    * Create a new HashCache instance
    * @param {string} cachePath - Path to the cache file
    * @param {number} verbosity - Verbosity level
    */
-  constructor(cachePath, verbosity = Verbosity.Normal) {
+  constructor(cachePath: string, verbosity: number = Verbosity.Normal) {
     this.cachePath = cachePath;
     this.verbosity = verbosity;
     this.cache = new Map();
@@ -27,18 +31,18 @@ export class HashCache {
    * Load cached hashes from file
    * @returns {Promise<boolean>} Success status
    */
-  async load() {
+  async load(): Promise<boolean> {
     try {
       if (fs.existsSync(this.cachePath)) {
-        const data = await fs.promises.readFile(this.cachePath, 'utf8');
+        const data = await fs.promises.readFile(this.cachePath, "utf8");
         const cache = JSON.parse(data);
         this.cache = new Map(Object.entries(cache));
         logVerbose(`Loaded hash cache from ${this.cachePath}`, this.verbosity);
         return true;
       }
       return false;
-    } catch (error) {
-      logError(`Error loading hash cache: ${error.message}`, this.verbosity);
+    } catch (error: any) {
+      logError(`Error loading hash cache: ${error.message}`);
       return false;
     }
   }
@@ -47,13 +51,13 @@ export class HashCache {
    * Save cached hashes to file
    * @returns {Promise<boolean>} Success status
    */
-  async save() {
+  async save(): Promise<boolean> {
     try {
       const cache = Object.fromEntries(this.cache);
       await fs.promises.writeFile(this.cachePath, JSON.stringify(cache, null, 2));
       logVerbose(`Saved hash cache to ${this.cachePath}`, this.verbosity);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       logVerbose(`Error saving hash cache: ${error.message}`, this.verbosity);
       return false;
     }
@@ -64,14 +68,14 @@ export class HashCache {
    * @param {string} filePath - Path to the file
    * @returns {Promise<string>} The file's MD5 hash
    */
-  async calculateHash(filePath) {
+  async calculateHash(filePath: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const hash = crypto.createHash('md5');
+      const hash = crypto.createHash("md5");
       const stream = fs.createReadStream(filePath);
-      
-      stream.on('error', reject);
-      stream.on('data', chunk => hash.update(chunk));
-      stream.on('end', () => resolve(hash.digest('hex')));
+
+      stream.on("error", reject);
+      stream.on("data", (chunk) => hash.update(chunk));
+      stream.on("end", () => resolve(hash.digest("hex")));
     });
   }
 
@@ -80,14 +84,14 @@ export class HashCache {
    * @param {string} filePath - Path to the file
    * @returns {Promise<boolean>} True if the file has changed
    */
-  async hasChanged(filePath) {
+  async hasChanged(filePath: string): Promise<boolean> {
     try {
       // Normalize the file path
       const normalizedPath = path.normalize(filePath);
-      
+
       const currentHash = await this.calculateHash(normalizedPath);
       const storedHash = this.cache.get(normalizedPath);
-      
+
       // If no stored hash exists, file has changed
       if (!storedHash) {
         logVerbose(`No cached hash for ${normalizedPath}, marking as changed`, this.verbosity);
@@ -95,10 +99,10 @@ export class HashCache {
         await this.save();
         return true;
       }
-      
+
       // Compare hashes
       const hasChanged = currentHash !== storedHash;
-      
+
       // Update stored hash if file has changed
       if (hasChanged) {
         logVerbose(`File hash changed for ${normalizedPath}`, this.verbosity);
@@ -107,10 +111,10 @@ export class HashCache {
       } else {
         logVerbose(`File ${normalizedPath} unchanged (hash match)`, this.verbosity);
       }
-      
+
       return hasChanged;
-    } catch (error) {
-      logError(`Error checking file changes: ${error.message}`, this.verbosity);
+    } catch (error: any) {
+      logError(`Error checking file changes: ${error.message}`);
       return true; // Assume file has changed if we can't check
     }
   }
@@ -120,7 +124,7 @@ export class HashCache {
    * @param {string} filePath - Path to the file
    * @param {string} hash - Hash to store
    */
-  updateHash(filePath, hash) {
+  updateHash(filePath: string, hash: string): void {
     const normalizedPath = path.normalize(filePath);
     this.cache.set(normalizedPath, hash);
     // Intentionally not saving here for performance; caller should call save() when appropriate
@@ -133,4 +137,4 @@ export class HashCache {
   get size() {
     return this.cache.size;
   }
-} 
+}

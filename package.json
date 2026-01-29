@@ -10,6 +10,7 @@
   "scripts": {
     "start": "bun index.ts",
     "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "build": "bun build --minify --target bun --sourcemap=linked ./index.ts --outdir ./dist/bin",
     "prepublishOnly": "bun test && bun run build"
   },

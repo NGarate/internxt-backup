@@ -1,16 +1,15 @@
-import { WebDAVConnectivityOptions, WebDAVServiceOptions, WebDAVClientOptions, UploadResult, DirectoryResult } from '../interfaces/webdav';
 /**
- * File system utilities for the WebDAV Backup Tool
+ * File system utilities for the Internxt Backup Tool
  * Handles file operations, checksums, and path manipulations
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { promisify } from 'node:util';
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { promisify } from "node:util";
 
 // Promisified functions
-export const existsAsync = fs.promises.exists;
+export const existsAsync = fs.promises.access;
 export const mkdirAsync = fs.promises.mkdir;
 export const readFileAsync = fs.promises.readFile;
 export const writeFileAsync = fs.promises.writeFile;
@@ -20,14 +19,14 @@ export const writeFileAsync = fs.promises.writeFile;
  * @param {string} pathToEncode - The path to encode
  * @returns {string} The URL encoded path
  */
-export function urlEncodePath(pathToEncode) {
+export function urlEncodePath(pathToEncode: string): string {
   // Replace backslashes with forward slashes before encoding
-  const normalizedPath = pathToEncode.replace(/\\/g, '/');
-  
+  const normalizedPath = pathToEncode.replace(/\\/g, "/");
+
   // Split by forward slash and encode each component
-  return normalizedPath.split('/').map(component => 
+  return normalizedPath.split("/").map(component =>
     encodeURIComponent(component)
-  ).join('/');
+  ).join("/");
 }
 
 /**
@@ -35,7 +34,7 @@ export function urlEncodePath(pathToEncode) {
  * @param {string} filePath - Path to the file
  * @returns {Promise<string>} The MD5 checksum
  */
-export async function calculateChecksum(filePath) {
+export async function calculateChecksum(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("md5");
     const stream = fs.createReadStream(filePath);
@@ -51,9 +50,9 @@ export async function calculateChecksum(filePath) {
  * @param {string} filePath - The path to the file
  * @param {Object} data - The data to save
  */
-export async function saveJsonToFile(filePath, data) {
+export async function saveJsonToFile(filePath: string, data: any): Promise<boolean> {
   try {
-    await writeFileAsync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    await writeFileAsync(filePath, JSON.stringify(data, null, 2), "utf8");
     return true;
   } catch (error) {
     console.error(`Error saving JSON to ${filePath}:`, error);
@@ -67,15 +66,12 @@ export async function saveJsonToFile(filePath, data) {
  * @param {Object} defaultValue - The default value to return if the file doesn't exist
  * @returns {Object} The parsed JSON data or the default value
  */
-export async function loadJsonFromFile(filePath, defaultValue = {}) {
+export async function loadJsonFromFile(filePath: string, defaultValue: any = {}): Promise<any> {
   try {
-    if (await existsAsync(filePath)) {
-      const data = await readFileAsync(filePath, 'utf8');
-      return JSON.parse(data);
-    }
-    return defaultValue;
-  } catch (error) {
-    console.error(`Error loading JSON from ${filePath}:`, error);
+    await existsAsync(filePath);
+    const data = await readFileAsync(filePath, "utf8");
+    return JSON.parse(data);
+  } catch {
     return defaultValue;
   }
-} 
+}

@@ -154,7 +154,7 @@ async function main() {
     // Run the main sync function with the parsed arguments
     await syncFiles(args.sourceDir, syncOptions);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error(chalk.red(`Error: ${error.message}`));
     console.log();
     showHelp();

@@ -9,4 +9,4 @@ export enum Verbosity {
 }
 
 export type LogLevel = Verbosity;
-export type LogFunction = (message: string, currentVerbosity?: number) => void; 
+export type LogFunction = (message: string, currentVerbosity: number) => void; 

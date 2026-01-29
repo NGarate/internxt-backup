@@ -52,23 +52,23 @@ function ensureNewline(message: string): string {
  * @param {boolean} allowDuplicates - Whether to allow duplicate messages
  */
 export function log(
-  message: string, 
-  level: LogLevel, 
-  currentVerbosity: number, 
+  message: string,
+  level: LogLevel,
+  currentVerbosity: number,
   allowDuplicates: boolean = true
-): LogFunction {
+): void {
   if (currentVerbosity >= level) {
     // Skip duplicate messages if not allowed
     if (!allowDuplicates && recentMessages.has(message)) {
       return;
     }
-    
+
     // Always ensure message ends with a newline
     const formattedMessage = ensureNewline(message);
-    
+
     // Write to stdout
     process.stdout.write(formattedMessage);
-    
+
     // Track message to prevent duplicates if needed
     if (!allowDuplicates) {
       recentMessages.add(message);

@@ -1,5 +1,5 @@
 /**
- * File Scanner for WebDAV Backup Tool
+ * File Scanner for Internxt Backup Tool
  * Handles scanning directories and determining which files need to be uploaded
  */
 
@@ -30,14 +30,14 @@ export default class FileScanner {
    */
   constructor(sourceDir: string, verbosity: number = logger.Verbosity.Normal, forceUpload: boolean = false) {
     this.sourceDir = path.resolve(sourceDir);
-    this.statePath = path.join(os.tmpdir(), "webdav-backup-state.json");
+    this.statePath = path.join(os.tmpdir(), "internxt-backup-state.json");
     this.uploadState = { files: {}, lastRun: "" };
     this.verbosity = verbosity;
     this.forceUpload = forceUpload;
     
     // Use the same hash cache that the uploader will use
     this.hashCache = new HashCache(
-      path.join(os.tmpdir(), 'webdav-backup-hash-cache.json'),
+      path.join(os.tmpdir(), "internxt-backup-hash-cache.json"),
       verbosity
     );
     this.hashCache.load();
