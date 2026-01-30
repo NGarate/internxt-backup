@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            artifact: internxt-backup-linux-x64
+            platform_name: Linux x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            artifact: internxt-backup-linux-arm64
+            platform_name: Linux ARM64
+          - os: macos-latest
+            target: bun-darwin-x64
+            artifact: internxt-backup-macos-x64
+            platform_name: macOS x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+            artifact: internxt-backup-macos-arm64
+            platform_name: macOS ARM64 (Apple Silicon)
+          - os: windows-latest
+            target: bun-windows-x64
+            artifact: internxt-backup-windows-x64.exe
+            platform_name: Windows x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ matrix.target }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build executable
+        run: bun build --compile --target ${{ matrix.target }} --outfile ./dist/${{ matrix.artifact }} ./index.ts
+
+      - name: Create archive
+        shell: bash
+        run: |
+          mkdir -p ./release
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp ./dist/${{ matrix.artifact }} ./release/
+            cd ./release
+            7z a -tzip ${{ matrix.artifact }}.zip ${{ matrix.artifact }}
+          else
+            cp ./dist/${{ matrix.artifact }} ./release/
+            cd ./release
+            chmod +x ${{ matrix.artifact }}
+            tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
+          fi
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./release/${{ matrix.artifact }}.*
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-release-notes:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Get CHANGELOG entry
+        id: changelog
+        run: |
+          VERSION=${{ github.ref_name }}
+          # Extract changelog entry for this version
+          CHANGELOG=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | head -n -1)
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update release notes
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ## Installation
+
+            Download the appropriate binary for your platform from the assets below.
+
+            ### Linux/macOS
+            ```bash
+            # Download and extract
+            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/').tar.gz
+            tar -xzf internxt-backup.tar.gz
+            chmod +x internxt-backup-*
+            ./internxt-backup-* --help
+            ```
+
+            ### Windows
+            Download the `.exe` file and run it directly.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
