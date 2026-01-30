@@ -34,6 +34,88 @@ interface MockWebDAVService {
   getUsedSpace: () => Promise<number>;
 }
 
+// Internxt Service Interfaces
+export interface MockInternxtService {
+  checkCLI: () => Promise<{
+    installed: boolean;
+    authenticated: boolean;
+    version?: string;
+    error?: string;
+  }>;
+  uploadFile: (localPath: string, remotePath: string) => Promise<{
+    success: boolean;
+    filePath: string;
+    remotePath: string;
+    output?: string;
+    error?: string;
+  }>;
+  uploadFileWithProgress: (
+    localPath: string,
+    remotePath: string,
+    onProgress?: (percent: number) => void
+  ) => Promise<{
+    success: boolean;
+    filePath: string;
+    remotePath: string;
+    output?: string;
+    error?: string;
+  }>;
+  createFolder: (remotePath: string) => Promise<{
+    success: boolean;
+    path: string;
+    output?: string;
+    error?: string;
+  }>;
+  listFiles: (remotePath?: string) => Promise<{
+    success: boolean;
+    files: Array<{
+      name: string;
+      path: string;
+      size: number;
+      isFolder: boolean;
+    }>;
+    error?: string;
+  }>;
+  fileExists: (remotePath: string) => Promise<boolean>;
+  deleteFile: (remotePath: string) => Promise<boolean>;
+}
+
+export interface MockCompressionService {
+  shouldCompress: (filePath: string, size: number) => boolean;
+  compressFile: (filePath: string) => Promise<{
+    success: boolean;
+    originalPath: string;
+    compressedPath: string;
+    originalSize: number;
+    compressedSize: number;
+    ratio: number;
+    error?: string;
+  }>;
+  compressForUpload: (filePath: string) => Promise<string>;
+  cleanup: (filePath: string) => Promise<void>;
+  cleanupAll: () => Promise<void>;
+  getCompressedRemotePath: (remotePath: string) => string;
+  isCompressedPath: (remotePath: string) => boolean;
+}
+
+export interface MockResumableUploader {
+  shouldUseResumable: (fileSize: number) => boolean;
+  uploadLargeFile: (
+    filePath: string,
+    remotePath: string,
+    onProgress?: (percent: number) => void
+  ) => Promise<{
+    success: boolean;
+    filePath: string;
+    remotePath: string;
+    bytesUploaded: number;
+    error?: string;
+  }>;
+  getUploadProgress: (filePath: string) => Promise<number>;
+  canResume: (filePath: string) => Promise<boolean>;
+  clearState: (filePath: string) => Promise<void>;
+}
+
 interface MockFileScanner {
   sourceDir: string;
   scan: () => Promise<any[]>;
@@ -124,7 +206,7 @@ export function createMockLoggers(): MockLoggers {
 
 /**
  * Creates a standard mock WebDAV service
- * 
+ * @deprecated Use createMockInternxtService instead
  * @returns Mock WebDAV service
  */
 export function createMockWebDAVService(): MockWebDAVService {
@@ -136,6 +218,95 @@ export function createMockWebDAVService(): MockWebDAVService {
     checkServerCompatibility: mock(() => Promise.resolve(true)),
     getFreeSpace: mock(() => Promise.resolve(1000000)),
     getUsedSpace: mock(() => Promise.resolve(500000))
+  };
+}
+
+/**
+ * Creates a standard mock Internxt service
+ *
+ * @returns Mock Internxt service
+ */
+export function createMockInternxtService(): MockInternxtService {
+  return {
+    checkCLI: mock(() => Promise.resolve({
+      installed: true,
+      authenticated: true,
+      version: "1.0.0",
+      error: undefined
+    })),
+    uploadFile: mock(() => Promise.resolve({
+      success: true,
+      filePath: '/local/path',
+      remotePath: '/remote/path',
+      output: 'Upload successful',
+      error: undefined
+    })),
+    uploadFileWithProgress: mock(() => Promise.resolve({
+      success: true,
+      filePath: '/local/path',
+      remotePath: '/remote/path',
+      output: 'Upload successful',
+      error: undefined
+    })),
+    createFolder: mock(() => Promise.resolve({
+      success: true,
+      path: '/remote/path',
+      output: 'Folder created',
+      error: undefined
+    })),
+    listFiles: mock(() => Promise.resolve({
+      success: true,
+      files: [],
+      error: undefined
+    })),
+    fileExists: mock(() => Promise.resolve(false)),
+    deleteFile: mock(() => Promise.resolve(true))
+  };
+}
+
+/**
+ * Creates a standard mock Compression service
+ *
+ * @returns Mock Compression service
+ */
+export function createMockCompressionService(): MockCompressionService {
+  return {
+    shouldCompress: mock(() => true),
+    compressFile: mock(() => Promise.resolve({
+      success: true,
+      originalPath: '/original/path',
+      compressedPath: '/compressed/path.gz',
+      originalSize: 1024,
+      compressedSize: 512,
+      ratio: 50,
+      error: undefined
+    })),
+    compressForUpload: mock(() => Promise.resolve('/compressed/path.gz')),
+    cleanup: mock(() => Promise.resolve()),
+    cleanupAll: mock(() => Promise.resolve()),
+    getCompressedRemotePath: mock((remotePath: string) => `${remotePath}.gz`),
+    isCompressedPath: mock((remotePath: string) => remotePath.endsWith('.gz'))
+  };
+}
+
+/**
+ * Creates a standard mock ResumableUploader
+ *
+ * @returns Mock ResumableUploader
+ */
+export function createMockResumableUploader(): MockResumableUploader {
+  return {
+    shouldUseResumable: mock((fileSize: number) => fileSize > 100 * 1024 * 1024),
+    uploadLargeFile: mock(() => Promise.resolve({
+      success: true,
+      filePath: '/local/path',
+      remotePath: '/remote/path',
+      bytesUploaded: 1024,
+      error: undefined
+    })),
+    getUploadProgress: mock(() => Promise.resolve(50)),
+    canResume: mock(() => Promise.resolve(false)),
+    clearState: mock(() => Promise.resolve())
   };
 }
 
@@ -294,6 +465,9 @@ export default {
   spyOn,
   createMockLoggers,
   createMockWebDAVService,
+  createMockInternxtService,
+  createMockCompressionService,
+  createMockResumableUploader,
   createMockFileScanner,
   createMockFileInfo,
   createMockFs,

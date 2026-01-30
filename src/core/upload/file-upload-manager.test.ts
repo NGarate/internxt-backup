@@ -2,7 +2,7 @@
  * Tests for File Upload Manager
  */
 
-import { expect, describe, it, beforeEach, mock, spyOn } from 'bun:test';
+import { expect, describe, it, beforeEach, afterEach, mock, spyOn, jest } from 'bun:test';
 import { FileUploadManager } from './file-upload-manager';
 import { Verbosity } from '../../interfaces/logger';
 import * as logger from '../../utils/logger';
@@ -22,16 +22,24 @@ describe('FileUploadManager', () => {
   let mockProgressTracker;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     mockProgressTracker = {
       recordSuccess: mock(() => {}),
       recordFailure: mock(() => {})
     };
-    
+
     // Create spies for logger functions
     spyOn(logger, 'verbose').mockImplementation(() => {});
     spyOn(logger, 'info').mockImplementation(() => {});
     spyOn(logger, 'error').mockImplementation(() => {});
     spyOn(logger, 'success').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    if (jest.isFakeTimers()) {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   describe('constructor', () => {
@@ -107,8 +115,9 @@ describe('FileUploadManager', () => {
       // Call processNextFile
       await manager.processNextFile();
       
-      // Wait for the upload to complete (with error)
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // Advance fake timers instead of real wait
+      jest.advanceTimersByTime(10);
+      await Promise.resolve(); // Let promises settle
       
       // Should have logged the error
       expect(logger.error).toHaveBeenCalled();

@@ -5,49 +5,50 @@
 import { expect, describe, it, beforeEach, afterEach } from 'bun:test';
 import * as logger from './logger';
 import { Verbosity } from '../interfaces/logger';
-import { skipIfSpyingIssues } from '../../test-config/mocks/test-helpers';
 
 describe('Logger Utilities', () => {
-  let originalStdout;
-  let originalStderr;
-  let stdoutCalls;
-  let stderrCalls;
-  
+  let originalStdoutWrite: any;
+  let originalStderrWrite: any;
+  let stdoutOutput: string[];
+  let stderrOutput: string[];
+
   beforeEach(() => {
     // Save original stdout/stderr
-    originalStdout = process.stdout.write;
-    originalStderr = process.stderr.write;
-    
-    // Initialize call tracking arrays
-    stdoutCalls = [];
-    stderrCalls = [];
-    
-    // Mock stdout/stderr directly
-    try {
-      process.stdout.write = function(...args) {
-        stdoutCalls.push(args);
-        return true;
-      };
-      
-      process.stderr.write = function(...args) {
-        stderrCalls.push(args);
-        return true;
-      };
-    } catch (error) {
-      console.warn('Could not mock process.stdout/stderr:', error.message);
-    }
+    originalStdoutWrite = process.stdout.write;
+    originalStderrWrite = process.stderr.write;
+
+    // Initialize output tracking arrays
+    stdoutOutput = [];
+    stderrOutput = [];
+
+    // Mock stdout/stderr
+    process.stdout.write = function(chunk: any, encoding?: any, cb?: any): boolean {
+      if (typeof chunk === 'string') {
+        stdoutOutput.push(chunk);
+      } else if (Buffer.isBuffer(chunk)) {
+        stdoutOutput.push(chunk.toString());
+      }
+      if (typeof cb === 'function') cb();
+      return true;
+    };
+
+    process.stderr.write = function(chunk: any, encoding?: any, cb?: any): boolean {
+      if (typeof chunk === 'string') {
+        stderrOutput.push(chunk);
+      } else if (Buffer.isBuffer(chunk)) {
+        stderrOutput.push(chunk.toString());
+      }
+      if (typeof cb === 'function') cb();
+      return true;
+    };
   });
-  
+
   afterEach(() => {
     // Restore original stdout/stderr
-    try {
-      process.stdout.write = originalStdout;
-      process.stderr.write = originalStderr;
-    } catch (error) {
-      console.warn('Could not restore process.stdout/stderr:', error.message);
-    }
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
   });
-  
+
   describe('Verbosity Levels', () => {
     it('should define the correct verbosity levels', () => {
       expect(Verbosity.Quiet).toBe(0);
@@ -55,163 +56,157 @@ describe('Logger Utilities', () => {
       expect(Verbosity.Verbose).toBe(2);
     });
   });
-  
+
   describe('log', () => {
-    skipIfSpyingIssues('should log message when level is less than or equal to current verbosity', () => {
+    it('should log message when level is less than or equal to current verbosity', () => {
       const message = 'Test message';
       const messageLevel = Verbosity.Normal;
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.log(message, messageLevel, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
-    
-    skipIfSpyingIssues('should not log message when level is greater than current verbosity', () => {
+
+    it('should not log message when level is greater than current verbosity', () => {
       const message = 'Test message';
       const messageLevel = Verbosity.Verbose;
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.log(message, messageLevel, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBe(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that no output was written
+      expect(stdoutOutput.length).toBe(0);
     });
   });
-  
+
   describe('error', () => {
-    skipIfSpyingIssues('should log error message with red color', () => {
+    it('should log error message to stderr', () => {
       const message = 'Error message';
-      
+
       logger.error(message);
-      
-      // Skip actual output checking
-      // expect(stderrCalls.length).toBeGreaterThan(0);
-      // const output = stderrCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that error was written to stderr
+      expect(stderrOutput.length).toBeGreaterThan(0);
+      expect(stderrOutput.some(output => output.includes(message))).toBe(true);
     });
   });
-  
+
   describe('warning', () => {
-    skipIfSpyingIssues('should log warning message with yellow color when verbosity is Normal', () => {
+    it('should log warning message when verbosity is Normal', () => {
       const message = 'Warning message';
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.warning(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      // const output = stdoutCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
-    
-    skipIfSpyingIssues('should not log warning message when verbosity is Quiet', () => {
+
+    it('should not log warning message when verbosity is Quiet', () => {
       const message = 'Warning message';
       const currentVerbosity = Verbosity.Quiet;
-      
+
       logger.warning(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBe(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that no output was written
+      expect(stdoutOutput.length).toBe(0);
     });
   });
-  
+
   describe('info', () => {
-    skipIfSpyingIssues('should log info message with blue color when verbosity is Normal', () => {
+    it('should log info message when verbosity is Normal', () => {
       const message = 'Info message';
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.info(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      // const output = stdoutCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
-    
-    skipIfSpyingIssues('should not log info message when verbosity is Quiet', () => {
+
+    it('should not log info message when verbosity is Quiet', () => {
       const message = 'Info message';
       const currentVerbosity = Verbosity.Quiet;
-      
+
       logger.info(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBe(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that no output was written
+      expect(stdoutOutput.length).toBe(0);
     });
   });
-  
+
   describe('success', () => {
-    skipIfSpyingIssues('should log success message with green color when verbosity is Normal', () => {
+    it('should log success message when verbosity is Normal', () => {
       const message = 'Success message';
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.success(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      // const output = stdoutCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
-    
-    skipIfSpyingIssues('should not log success message when verbosity is Quiet', () => {
+
+    it('should not log success message when verbosity is Quiet', () => {
       const message = 'Success message';
       const currentVerbosity = Verbosity.Quiet;
-      
+
       logger.success(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBe(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that no output was written
+      expect(stdoutOutput.length).toBe(0);
     });
   });
-  
+
   describe('verbose', () => {
-    skipIfSpyingIssues('should log verbose message when verbosity is Verbose', () => {
+    it('should log verbose message when verbosity is Verbose', () => {
       const message = 'Verbose message';
       const currentVerbosity = Verbosity.Verbose;
-      
+
       logger.verbose(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      // const output = stdoutCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
-    
-    skipIfSpyingIssues('should not log verbose message when verbosity is Normal', () => {
+
+    it('should not log verbose message when verbosity is Normal', () => {
       const message = 'Verbose message';
       const currentVerbosity = Verbosity.Normal;
-      
+
       logger.verbose(message, currentVerbosity);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBe(0);
-      expect(true).toBe(true); // Always passes
+
+      // Check that no output was written
+      expect(stdoutOutput.length).toBe(0);
     });
   });
-  
+
   describe('always', () => {
-    skipIfSpyingIssues('should always log message regardless of verbosity', () => {
+    it('should always log message regardless of verbosity', () => {
       const message = 'Always message';
       const verbosityQuiet = Verbosity.Quiet;
-      
+
       logger.always(message, verbosityQuiet);
-      
-      // Skip actual output checking
-      // expect(stdoutCalls.length).toBeGreaterThan(0);
-      // const output = stdoutCalls[0][0].toString();
-      // expect(output).toContain(message);
-      expect(true).toBe(true); // Always passes
+
+      // Check that output was written even with Quiet verbosity
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+    });
+
+    it('should log message with Normal verbosity', () => {
+      const message = 'Always message';
+      const verbosityNormal = Verbosity.Normal;
+
+      logger.always(message, verbosityNormal);
+
+      // Check that output was written
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
     });
   });
-}); 
+});

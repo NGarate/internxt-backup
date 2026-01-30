@@ -5,7 +5,7 @@
  * without depending on external modules like chalk.
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock, spyOn, jest } from 'bun:test';
 import { ProgressTracker } from './progress-tracker';
 import { Verbosity } from '../../interfaces/logger';
 import * as logger from '../../utils/logger';
@@ -38,6 +38,7 @@ describe('ProgressTracker', () => {
   let loggerSpy;
   
   beforeEach(() => {
+    jest.useFakeTimers();
     // Mock process.stdout.write
     process.stdout.write = mock(() => {});
     
@@ -46,6 +47,10 @@ describe('ProgressTracker', () => {
   });
   
   afterEach(() => {
+    if (jest.isFakeTimers()) {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
     // Restore original process.stdout.write
     process.stdout.write = originalStdoutWrite;
     
@@ -112,16 +117,34 @@ describe('ProgressTracker', () => {
     it('should start and stop progress updates', () => {
       const tracker = new TestableProgressTracker();
       tracker.initialize(10);
-      
-      // Start progress updates
+
+      // Create a spy on displayProgress to verify it's called
+      const displaySpy = spyOn(tracker, 'displayProgress');
+
+      // Start progress updates (this immediately calls displayProgress once)
       tracker.startProgressUpdates();
       expect(tracker.isTrackingActive).toBe(true);
       expect(tracker.updateInterval).not.toBe(null);
-      
+
+      // startProgressUpdates immediately calls displayProgress once
+      expect(displaySpy).toHaveBeenCalledTimes(1);
+
+      // Advance timers to trigger interval (default 250ms)
+      jest.advanceTimersByTime(250);
+      expect(displaySpy).toHaveBeenCalledTimes(2);
+
+      // Advance again to verify it fires repeatedly
+      jest.advanceTimersByTime(250);
+      expect(displaySpy).toHaveBeenCalledTimes(3);
+
       // Stop progress updates
       tracker.stopProgressUpdates();
       expect(tracker.isTrackingActive).toBe(false);
       expect(tracker.updateInterval).toBe(null);
+
+      // Advance timers again - should not call displayProgress anymore
+      jest.advanceTimersByTime(250);
+      expect(displaySpy).toHaveBeenCalledTimes(3); // Still 3, not 4
     });
   });
 }); 

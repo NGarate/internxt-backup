@@ -4,7 +4,8 @@
       "WebSearch",
       "Bash(bun install:*)",
       "Bash(bun run typecheck:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(bun test:*)"
     ]
   }
 }

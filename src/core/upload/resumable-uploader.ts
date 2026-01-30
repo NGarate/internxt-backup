@@ -16,6 +16,7 @@ export interface ResumableUploadOptions {
   chunkSize?: number; // in bytes, default 50MB
   resumeDir?: string;
   verbosity?: number;
+  retryDelayMs?: number; // Delay between retries in ms (for testing, default uses exponential backoff)
 }
 
 export interface ResumableUploadResult {
@@ -34,11 +35,13 @@ export class ResumableUploader {
   private resumeDir: string;
   private verbosity: number;
   private internxtService: InternxtService;
+  private retryDelayMs: number | undefined;
 
   constructor(internxtService: InternxtService, options: ResumableUploadOptions = {}) {
     this.chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
     this.resumeDir = options.resumeDir ?? join(tmpdir(), "internxt-uploads");
     this.verbosity = options.verbosity ?? logger.Verbosity.Normal;
+    this.retryDelayMs = options.retryDelayMs;
     this.internxtService = internxtService;
 
     // Ensure resume directory exists
@@ -236,8 +239,8 @@ export class ResumableUploader {
             };
           }
 
-          // Wait before retry (exponential backoff)
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+          // Wait before retry (use configured delay for testing, otherwise exponential backoff)
+          const delay = this.retryDelayMs ?? Math.min(1000 * Math.pow(2, retryCount), 10000);
           logger.verbose(`Retrying in ${delay}ms...`, this.verbosity);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
