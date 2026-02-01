@@ -139,7 +139,14 @@ jobs:
             ./internxt-backup-* --help
             ```
 
-            ### Windows
-            Download the `.exe` file and run it directly.
+            ### Windows (PowerShell)
+            ```powershell
+            # Download and extract
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/internxt-backup-windows-x64.exe.zip" -OutFile "internxt-backup.zip"
+            Expand-Archive -Path "internxt-backup.zip" -DestinationPath "."
+            .\internxt-backup-windows-x64.exe --help
+            ```
+
+            > **Note:** Only Windows x64 is currently supported. Windows ARM64 users can run the x64 binary via emulation.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
