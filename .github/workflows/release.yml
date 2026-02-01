@@ -133,7 +133,7 @@ jobs:
             ### Linux/macOS
             ```bash
             # Download and extract
-            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/').tar.gz
+            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')-$(uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/').tar.gz
             tar -xzf internxt-backup.tar.gz
             chmod +x internxt-backup-*
             ./internxt-backup-* --help
