@@ -21,7 +21,7 @@ This file contains essential information for AI coding agents working on the **i
 
 | Component | Technology |
 |-----------|------------|
-| Runtime | Bun (≥1.0.0) |
+| Runtime | Bun (≥1.3.8) |
 | Language | TypeScript 5.8+ |
 | Module System | ESM (ES Modules) |
 | Testing | Bun's built-in test runner (`bun:test`) |
