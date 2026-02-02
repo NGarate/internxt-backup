@@ -58,15 +58,34 @@ jobs:
           
           # Get the latest release with retry logic
           LATEST_RELEASE=""
+          API_SUCCESS=false
           for i in $(seq 1 $MAX_RETRIES); do
-            LATEST_RELEASE=$(gh api repos/"$REPOSITORY"/releases/latest 2>&1) && break
+            if LATEST_RELEASE=$(gh api repos/"$REPOSITORY"/releases/latest 2>&1); then
+              API_SUCCESS=true
+              break
+            fi
             echo "Attempt $i failed, waiting ${RETRY_DELAY}s before retry..."
             sleep $RETRY_DELAY
             RETRY_DELAY=$((RETRY_DELAY * 2))
           done
           
+          if [[ "$API_SUCCESS" != "true" ]]; then
+            echo "ERROR: Failed to fetch release from GitHub API after $MAX_RETRIES attempts"
+            echo "Last response: $LATEST_RELEASE"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           if [[ -z "$LATEST_RELEASE" ]] || [[ "$LATEST_RELEASE" == "" ]]; then
             echo "No release found, skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Validate that we got valid JSON
+          if ! echo "$LATEST_RELEASE" | jq -e . > /dev/null 2>&1; then
+            echo "ERROR: API response is not valid JSON"
+            echo "Response: $LATEST_RELEASE"
             echo "should_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi
