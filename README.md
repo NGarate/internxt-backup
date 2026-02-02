@@ -20,7 +20,7 @@ A simple, fast, and efficient tool for backing up files to Internxt Drive using 
 
 ## Requirements
 
-- [Bun](https://bun.sh/) runtime ≥ 1.0.0
+- [Bun](https://bun.sh/) runtime ≥ 1.3.8
 - [Internxt CLI](https://github.com/internxt/cli) installed and authenticated
 
 ## Installation
@@ -189,6 +189,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed commit conventions.
 ### Download Pre-built Executables
 
 Pre-built executables are available for:
+
 - Linux (x64, ARM64)
 - macOS (x64, ARM64/Apple Silicon)
 - Windows (x64)
@@ -199,7 +200,7 @@ Download from [GitHub Releases](https://github.com/ngarate/internxt-backup/relea
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) runtime ≥ 1.0.0
+- [Bun](https://bun.sh/) runtime ≥ 1.3.8
 - Git
 
 ### Setup
