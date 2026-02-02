@@ -47,6 +47,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      # Note: GITHUB_TOKEN is used here which means tag push events won't trigger
+      # other workflows directly. The release.yml workflow uses workflow_run trigger
+      # to detect when this workflow completes and then builds the release assets.
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

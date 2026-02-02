@@ -1,6 +1,13 @@
 name: Release
 
 on:
+  # Trigger when semantic-release workflow completes
+  # This works around the limitation where GITHUB_TOKEN events don't trigger workflows
+  workflow_run:
+    workflows: ["Semantic Release"]
+    types:
+      - completed
+  # Keep push trigger as fallback for manual tag pushes (e.g., with PAT)
   push:
     tags:
       - 'v*'
@@ -10,8 +17,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Determine the release tag to build
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.get-tag.outputs.tag }}
+      should_build: ${{ steps.get-tag.outputs.should_build }}
+    steps:
+      - name: Get tag from push event
+        if: github.event_name == 'push'
+        id: push-tag
+        run: |
+          echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          echo "should_build=true" >> $GITHUB_OUTPUT
+
+      - name: Get tag from workflow_run event
+        if: github.event_name == 'workflow_run'
+        id: workflow-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Only proceed if the triggering workflow was successful
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Semantic release workflow did not succeed, skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get the latest release to find the tag
+          LATEST_RELEASE=$(gh api repos/${{ github.repository }}/releases/latest 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_RELEASE" ] || [ "$LATEST_RELEASE" == "" ]; then
+            echo "No release found, skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+          CREATED_AT=$(echo "$LATEST_RELEASE" | jq -r '.created_at')
+          
+          # Check if the release was created within the last 10 minutes (to avoid rebuilding old releases)
+          RELEASE_TIME=$(date -d "$CREATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CREATED_AT" +%s)
+          NOW=$(date +%s)
+          AGE=$((NOW - RELEASE_TIME))
+          
+          if [ $AGE -gt 600 ]; then
+            echo "Latest release is older than 10 minutes ($AGE seconds), skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Found recent release: $TAG (created $AGE seconds ago)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "should_build=true" >> $GITHUB_OUTPUT
+
+      - name: Set outputs
+        id: get-tag
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "tag=${{ steps.push-tag.outputs.tag }}" >> $GITHUB_OUTPUT
+            echo "should_build=${{ steps.push-tag.outputs.should_build }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ steps.workflow-tag.outputs.tag }}" >> $GITHUB_OUTPUT
+            echo "should_build=${{ steps.workflow-tag.outputs.should_build }}" >> $GITHUB_OUTPUT
+          fi
+
   build-and-release:
     name: Build and Release
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -43,6 +119,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -85,8 +162,9 @@ jobs:
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
           files: ./release/${{ matrix.artifact }}.*
-          name: Release ${{ github.ref_name }}
+          name: Release ${{ needs.prepare.outputs.tag }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,12 +172,14 @@ jobs:
   update-release-notes:
     name: Update Release Notes
     runs-on: ubuntu-latest
-    needs: build-and-release
+    needs: [prepare, build-and-release]
+    if: needs.prepare.outputs.should_build == 'true'
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -113,7 +193,7 @@ jobs:
       - name: Get CHANGELOG entry
         id: changelog
         run: |
-          VERSION=${{ github.ref_name }}
+          VERSION=${{ needs.prepare.outputs.tag }}
           VERSION=${VERSION#v}  # Remove 'v' prefix to match changelog format (e.g., v1.0.0 -> 1.0.0)
           # Extract changelog entry for this version
           CHANGELOG=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | head -n -1)
@@ -124,6 +204,7 @@ jobs:
       - name: Update release notes
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
           body: |
             ${{ steps.changelog.outputs.CHANGELOG }}
 
@@ -134,7 +215,7 @@ jobs:
             ### Linux/macOS
             ```bash
             # Download and extract
-            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')-$(uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/').tar.gz
+            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.tag }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')-$(uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/').tar.gz
             tar -xzf internxt-backup.tar.gz
             chmod +x internxt-backup-*
             ./internxt-backup-* --help
