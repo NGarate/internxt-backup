@@ -33,14 +33,14 @@ This file contains essential information for AI coding agents working on the **i
 
 **Production:**
 
-- `chalk` (^5.4.1) - Terminal string styling
-- `croner` (^9.0.0) - Cron-based scheduling
+- `chalk` (^5.6.2) - Terminal string styling
+- `croner` (^10.0.1) - Cron-based scheduling
 
 **Development:**
 
 - `typescript` (^5.8.3)
-- `bun-types` (^1.2.8)
-- `@types/jest` (^29.5.14)
+- `bun-types` (^1.3.8)
+- `@types/jest` (^30.0.0)
 
 ---
 
