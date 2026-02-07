@@ -5,7 +5,12 @@
       "Bash(bun install:*)",
       "Bash(bun run typecheck:*)",
       "Bash(git add:*)",
-      "Bash(bun test:*)"
+      "Bash(bun test:*)",
+      "Bash(git commit:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)"
     ]
-  }
+  },
+  "prefersReducedMotion": false
 }
