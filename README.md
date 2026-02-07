@@ -184,7 +184,7 @@ git commit -m "feat: redesign configuration format
 BREAKING CHANGE: config file format changed from JSON to YAML"
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed commit conventions.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for detailed commit conventions.
 
 ### Download Pre-built Executables
 
