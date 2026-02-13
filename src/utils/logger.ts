@@ -63,10 +63,8 @@ export function log(
       return;
     }
 
-    // Always ensure message ends with a newline
-    const formattedMessage = ensureNewline(message);
+    const formattedMessage = message.endsWith('\n') ? message : message + '\n';
 
-    // Write to stdout
     process.stdout.write(formattedMessage);
 
     // Track message to prevent duplicates if needed
@@ -83,7 +81,7 @@ export function log(
  */
 export function error (message: string): void {
   const formattedMessage = `❌ ${message}`;
-  process.stderr.write(ensureNewline(`${colors.red}${formattedMessage}${colors.reset}`));
+  process.stdout.write(`${colors.red}${formattedMessage}${colors.reset}\n`);
 }
 
 /**
@@ -130,5 +128,6 @@ export const verbose: LogFunction = (message, currentVerbosity) => {
  * @param {string} message - The message to show
  */
 export function always(message: string): void {
-  process.stdout.write(ensureNewline(message));
+  const formattedMessage = message.endsWith('\n') ? message : message + '\n';
+  process.stdout.write(formattedMessage);
 } 
