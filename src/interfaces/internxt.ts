@@ -36,6 +36,7 @@ export interface InternxtFileInfo {
   size: number;
   modified?: Date;
   isFolder: boolean;
+  uuid?: string;
 }
 
 export interface InternxtServiceOptions {
