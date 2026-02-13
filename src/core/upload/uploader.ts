@@ -64,7 +64,7 @@ export default class Uploader {
     verbosity: number = Verbosity.Normal,
     options: UploaderOptions = {}
   ) {
-    this.targetDir = targetDir.trim().replace(/^\/+|\/+$/g, "");
+    this.targetDir = targetDir.trim().replace(/\/+$/g, "");
     this.verbosity = verbosity;
     this.useCompression = options.compress ?? false;
     this.useResume = options.resume ?? false;
@@ -97,8 +97,7 @@ export default class Uploader {
       verbosity
     );
 
-    // Load hash cache on construction
-    this.hashCache.load();
+    // Hash cache will be loaded in startUpload() to ensure async load completes
 
     // Initialize state
     this.fileScanner = null;
@@ -281,10 +280,15 @@ export default class Uploader {
         if (this.fileScanner) {
           this.fileScanner.updateFileState(fileInfo.relativePath, fileInfo.checksum);
         }
+
+        // Record the uploaded file's hash so it's skipped on the next run
+        this.hashCache.updateHash(fileInfo.absolutePath, fileInfo.checksum);
+        await this.hashCache.save();
+
         this.progressTracker.recordSuccess();
         return { success: true, filePath: fileInfo.relativePath };
       } else {
-        logger.error(`Failed to upload ${fileInfo.relativePath}: ${result.output}`);
+        logger.error(`Failed to upload ${fileInfo.relativePath}: ${result.error || result.output || "Unknown error"}`);
         this.progressTracker.recordFailure();
         return { success: false, filePath: fileInfo.relativePath };
       }
@@ -307,6 +311,9 @@ export default class Uploader {
    * @returns {Promise<void>}
    */
   async startUpload(filesToUpload: FileInfo[]): Promise<void> {
+    // Load hash cache before processing
+    await this.hashCache.load();
+
     // Check connectivity first
     const cliStatus = await this.internxtService.checkCLI();
     if (!cliStatus.installed || !cliStatus.authenticated) {

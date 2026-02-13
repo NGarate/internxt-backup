@@ -98,7 +98,7 @@ export class HashCache {
       if (!storedHash) {
         logVerbose(`No cached hash for ${normalizedPath}, marking as changed`, this.verbosity);
         this.cache.set(normalizedPath, currentHash);
-        await this.save();
+        // Note: We intentionally don't save here - save() is called only after successful upload
         return true;
       }
 
@@ -109,7 +109,7 @@ export class HashCache {
       if (hasChanged) {
         logVerbose(`File hash changed for ${normalizedPath}`, this.verbosity);
         this.cache.set(normalizedPath, currentHash);
-        await this.save();
+        // Note: We intentionally don't save here - save() is called only after successful upload
       } else {
         logVerbose(`File ${normalizedPath} unchanged (hash match)`, this.verbosity);
       }

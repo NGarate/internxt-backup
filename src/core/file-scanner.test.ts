@@ -389,4 +389,45 @@ describe('FileScanner', () => {
       expect(scanner).toBeDefined();
     });
   });
+
+  describe('Hash cache regression — prevent re-uploading unchanged files', () => {
+    it('should load hash cache during scan before checking changes', async () => {
+      const scanner = new FileScanner('/test/dir');
+
+      // Track call order using instance-level spies to avoid prototype pollution
+      const callOrder: string[] = [];
+      const hashCache = (scanner as any).hashCache as InstanceType<typeof HashCache>;
+
+      const instanceLoadSpy = spyOn(hashCache, 'load').mockImplementation(() => {
+        callOrder.push('load');
+        return Promise.resolve(true);
+      });
+      const instanceHasChangedSpy = spyOn(hashCache, 'hasChanged').mockImplementation(() => {
+        callOrder.push('hasChanged');
+        return Promise.resolve(false);
+      });
+
+      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(() =>
+        Promise.resolve([{
+          relativePath: 'file1.txt',
+          absolutePath: '/test/dir/file1.txt',
+          size: 1024,
+          checksum: 'abc123',
+          hasChanged: null
+        }])
+      );
+
+      await scanner.scan();
+
+      // load must come before any hasChanged call
+      const loadIndex = callOrder.indexOf('load');
+      const hasChangedIndex = callOrder.indexOf('hasChanged');
+      expect(loadIndex).toBeGreaterThanOrEqual(0);
+      expect(hasChangedIndex).toBeGreaterThan(loadIndex);
+
+      scanDirSpy.mockRestore();
+      instanceLoadSpy.mockRestore();
+      instanceHasChangedSpy.mockRestore();
+    });
+  });
 });

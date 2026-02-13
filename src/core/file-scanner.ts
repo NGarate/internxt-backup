@@ -40,7 +40,6 @@ export default class FileScanner {
       path.join(os.tmpdir(), "internxt-backup-hash-cache.json"),
       verbosity
     );
-    this.hashCache.load();
   }
 
   /**
@@ -155,9 +154,10 @@ export default class FileScanner {
    */
   async scan(): Promise<ScanResult> {
     logger.info("Scanning directory...", this.verbosity);
-    
-    // Load previous state
+
+    // Load previous state and hash cache
     await this.loadState();
+    await this.hashCache.load();
 
     // Scan for files
     const allFiles = await this.scanDirectory(this.sourceDir);
