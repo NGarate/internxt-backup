@@ -14,19 +14,17 @@ import * as logger from '../../utils/logger';
 class TestableProgressTracker extends ProgressTracker {
   constructor(verbosity = Verbosity.Normal) {
     super(verbosity);
-    
-    // Override console methods to avoid side effects
-    this.originalConsoleLog = mock(() => {});
-    this.originalConsoleInfo = mock(() => {});
-    this.originalConsoleWarn = mock(() => {});
-    this.originalConsoleError = mock(() => {});
+
+    // Override write methods to avoid side effects
+    this.originalStdoutWrite = mock(() => true) as unknown as typeof process.stdout.write;
+    this.originalStderrWrite = mock(() => true) as unknown as typeof process.stderr.write;
   }
-  
+
   // Mock display methods to avoid actual console output
   displayProgress() {
     // No-op for testing
   }
-  
+
   displaySummary() {
     // No-op for testing
   }
