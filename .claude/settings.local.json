@@ -9,8 +9,19 @@
       "Bash(git commit:*)",
       "Bash(gh pr view:*)",
       "Bash(gh repo view:*)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(internxt whoami:*)",
+      "Bash(internxt list-files:*)",
+      "Bash(echo:*)",
+      "Bash(internxt:*)",
+      "Bash(bun run:*)",
+      "Bash(bun --eval:*)",
+      "Bash(bun:*)",
+      "WebFetch(domain:evilmartians.com)"
     ]
   },
+  "disabledMcpjsonServers": [
+    "chrome-devtools"
+  ],
   "prefersReducedMotion": false
 }
