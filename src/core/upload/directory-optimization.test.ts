@@ -8,7 +8,10 @@
 import { expect, describe, beforeEach, mock, it } from 'bun:test';
 import Uploader from './uploader';
 import { Verbosity } from '../../interfaces/logger';
-import { createMockInternxtService, createMockFileInfo } from '../../../test-config/mocks/test-helpers';
+import {
+  createMockInternxtService,
+  createMockFileInfo,
+} from '../../../test-config/mocks/test-helpers';
 
 describe('Directory Creation Optimization', () => {
   // Test data
@@ -50,7 +53,9 @@ describe('Directory Creation Optimization', () => {
     await uploader.startUpload([fileInfo1, fileInfo2, fileInfo3]);
 
     // Directory creation should be called
-    expect(mockInternxtService.createFolder.mock.calls.length).toBeGreaterThan(0);
+    expect(mockInternxtService.createFolder.mock.calls.length).toBeGreaterThan(
+      0,
+    );
 
     // Verify the directories are in the tracking set
     expect(uploader.createdDirectories).toBeDefined();
@@ -61,7 +66,7 @@ describe('Directory Creation Optimization', () => {
     const files = [
       createMockFileInfo('source/dir1/file1.txt'),
       createMockFileInfo('source/dir2/file2.txt'),
-      createMockFileInfo('source/dir3/subdir/file3.txt')
+      createMockFileInfo('source/dir3/subdir/file3.txt'),
     ];
 
     // Track when directories are created vs when files are uploaded
@@ -94,18 +99,29 @@ describe('Directory Creation Optimization', () => {
     }
 
     // Find the first upload event
-    const firstUploadIndex = events.findIndex(e => e.startsWith('upload-file:'));
+    const firstUploadIndex = events.findIndex((e) =>
+      e.startsWith('upload-file:'),
+    );
 
     // All directories should be created before any files are uploaded
     // This might not always be true for parallel uploads, but the key directories
     // should be pre-created early in the process
-    expect(events.filter(e => e.startsWith('create-dir:')).length).toBeGreaterThan(0);
+    expect(
+      events.filter((e) => e.startsWith('create-dir:')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('should efficiently handle a large number of files in deep directory structures', async () => {
     // Create a more complex directory structure with many files
     const files = [];
-    const dirStructure = ['dir1', 'dir2', 'dir1/sub1', 'dir1/sub2', 'dir2/sub1', 'dir1/sub1/sub'];
+    const dirStructure = [
+      'dir1',
+      'dir2',
+      'dir1/sub1',
+      'dir1/sub2',
+      'dir2/sub1',
+      'dir1/sub1/sub',
+    ];
 
     // Create 4 files per directory
     for (const dir of dirStructure) {
@@ -115,21 +131,26 @@ describe('Directory Creation Optimization', () => {
     }
 
     // Reset mock to count calls
-    mockInternxtService.createFolder = mock(() => Promise.resolve({ success: true, path: '/test', output: '' }));
+    mockInternxtService.createFolder = mock(() =>
+      Promise.resolve({ success: true, path: '/test', output: '' }),
+    );
 
     // Upload all files
     await uploader.startUpload(files);
 
     // Count unique directories that were created
-    const uniqueDirsCreated = new Set(mockInternxtService.createFolder.mock.calls
-      .map(args => args[0])).size;
+    const uniqueDirsCreated = new Set(
+      mockInternxtService.createFolder.mock.calls.map((args) => args[0]),
+    ).size;
 
     // Should be roughly equal to the number of unique directories (dirStructure.length + target)
     expect(uniqueDirsCreated).toBeLessThanOrEqual(dirStructure.length + 1);
 
     // Verify the call count is much less than the file count
     // Without optimization, it would make a call for each file
-    expect(mockInternxtService.createFolder.mock.calls.length).toBeLessThan(files.length);
+    expect(mockInternxtService.createFolder.mock.calls.length).toBeLessThan(
+      files.length,
+    );
 
     // Check that all files were processed
     expect(mockInternxtService.uploadFile.mock.calls.length).toBe(files.length);

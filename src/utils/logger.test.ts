@@ -22,13 +22,13 @@ describe('Logger Utilities', () => {
     stderrOutput = [];
 
     // Mock process.stdout.write
-    process.stdout.write = function(chunk: any, ...args: any[]): boolean {
+    process.stdout.write = function (chunk: any, ...args: any[]): boolean {
       stdoutOutput.push(String(chunk));
       return true;
     } as typeof process.stdout.write;
 
     // Mock process.stderr.write
-    process.stderr.write = function(chunk: any, ...args: any[]): boolean {
+    process.stderr.write = function (chunk: any, ...args: any[]): boolean {
       stderrOutput.push(String(chunk));
       return true;
     } as typeof process.stderr.write;
@@ -58,7 +58,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should not log message when level is greater than current verbosity', () => {
@@ -81,7 +83,9 @@ describe('Logger Utilities', () => {
 
       // Check that error was written to stderr
       expect(stderrOutput.length).toBeGreaterThan(0);
-      expect(stderrOutput.some(output => output.includes(message))).toBe(true);
+      expect(stderrOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
   });
 
@@ -94,7 +98,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should not log warning message when verbosity is Quiet', () => {
@@ -117,7 +123,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should not log info message when verbosity is Quiet', () => {
@@ -140,7 +148,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should not log success message when verbosity is Quiet', () => {
@@ -163,7 +173,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should not log verbose message when verbosity is Normal', () => {
@@ -185,7 +197,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written even with Quiet verbosity
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
 
     it('should log message with Normal verbosity', () => {
@@ -195,7 +209,9 @@ describe('Logger Utilities', () => {
 
       // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
+        true,
+      );
     });
   });
 });

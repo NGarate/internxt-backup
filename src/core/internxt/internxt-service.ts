@@ -3,17 +3,17 @@
  * Wraps the Internxt CLI for backup operations
  */
 
-import { spawn, exec } from "node:child_process";
-import { promisify } from "node:util";
-import * as logger from "../../utils/logger";
+import { spawn, exec } from 'node:child_process';
+import { promisify } from 'node:util';
+import * as logger from '../../utils/logger';
 import {
   InternxtCLICheckResult,
   InternxtUploadResult,
   InternxtFolderResult,
   InternxtListResult,
   InternxtFileInfo,
-  InternxtServiceOptions
-} from "../../interfaces/internxt";
+  InternxtServiceOptions,
+} from '../../interfaces/internxt';
 
 const execAsync = promisify(exec);
 
@@ -35,10 +35,10 @@ export class InternxtService {
     }
 
     try {
-      const { stdout } = await execAsync("internxt config --json");
+      const { stdout } = await execAsync('internxt config --json');
       const response = JSON.parse(stdout);
       // CLI returns: { success: true, config: { "Root folder ID": "uuid" } }
-      this.rootFolderUuid = response.config?.["Root folder ID"] || null;
+      this.rootFolderUuid = response.config?.['Root folder ID'] || null;
       return this.rootFolderUuid;
     } catch {
       return null;
@@ -55,20 +55,33 @@ export class InternxtService {
   /**
    * List contents of a folder by UUID
    */
-  private async listFolderContents(folderUuid: string): Promise<{ folders: Array<{ uuid: string; plainName: string }>; files: Array<{ uuid: string; plainName: string; type?: string; size: number }> }> {
+  private async listFolderContents(
+    folderUuid: string,
+  ): Promise<{
+    folders: Array<{ uuid: string; plainName: string }>;
+    files: Array<{
+      uuid: string;
+      plainName: string;
+      type?: string;
+      size: number;
+    }>;
+  }> {
     try {
       const { stdout } = await execAsync(
-        `internxt list --id=${this.shellEscape(folderUuid)} --json --non-interactive`
+        `internxt list --id=${this.shellEscape(folderUuid)} --json --non-interactive`,
       );
 
       const parsed = JSON.parse(stdout);
       const list = parsed.list ?? parsed;
       return {
         folders: list.folders || [],
-        files: list.files || []
+        files: list.files || [],
       };
     } catch (error) {
-      logger.verbose(`Failed to list folder contents: ${error}`, this.verbosity);
+      logger.verbose(
+        `Failed to list folder contents: ${error}`,
+        this.verbosity,
+      );
       return { folders: [], files: [] };
     }
   }
@@ -76,9 +89,12 @@ export class InternxtService {
   /**
    * Find a folder by name within a parent folder
    */
-  private async findFolderInParent(parentUuid: string, name: string): Promise<string | null> {
+  private async findFolderInParent(
+    parentUuid: string,
+    name: string,
+  ): Promise<string | null> {
     const { folders } = await this.listFolderContents(parentUuid);
-    const folder = folders.find(f => f.plainName === name);
+    const folder = folders.find((f) => f.plainName === name);
     return folder?.uuid || null;
   }
 
@@ -86,9 +102,12 @@ export class InternxtService {
    * Find a file by name within a folder.
    * Handles the CLI's name/type split: "index.js" is stored as plainName "index", type "js".
    */
-  private async findFileInFolder(folderUuid: string, fileName: string): Promise<{ uuid: string; plainName: string; size: number } | null> {
+  private async findFileInFolder(
+    folderUuid: string,
+    fileName: string,
+  ): Promise<{ uuid: string; plainName: string; size: number } | null> {
     const { files } = await this.listFolderContents(folderUuid);
-    const file = files.find(f => {
+    const file = files.find((f) => {
       // Try exact match first
       if (f.plainName === fileName) return true;
       // Reconstruct full name from plainName + type (CLI splits last extension)
@@ -104,10 +123,13 @@ export class InternxtService {
   /**
    * Create a single folder in the parent directory
    */
-  private async createSingleFolder(parentUuid: string, name: string): Promise<string | null> {
+  private async createSingleFolder(
+    parentUuid: string,
+    name: string,
+  ): Promise<string | null> {
     try {
       const { stdout } = await execAsync(
-        `internxt create-folder --name=${this.shellEscape(name)} --id=${this.shellEscape(parentUuid)} --json --non-interactive`
+        `internxt create-folder --name=${this.shellEscape(name)} --id=${this.shellEscape(parentUuid)} --json --non-interactive`,
       );
 
       // Try to parse JSON response
@@ -128,17 +150,30 @@ export class InternxtService {
       // Fall back to looking up the folder we just created
       return await this.findFolderInParent(parentUuid, name);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStr = error instanceof Error && 'stderr' in error ? String((error as Error & { stderr: string }).stderr) : errorMessage;
-      
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStr =
+        error instanceof Error && 'stderr' in error
+          ? String((error as Error & { stderr: string }).stderr)
+          : errorMessage;
+
       // Check if folder already exists (check both stdout and error)
-      const combinedOutput = (errorMessage + " " + errorStr).toLowerCase();
-      if (combinedOutput.includes("already exists") || combinedOutput.includes("exists")) {
-        logger.verbose(`Folder "${name}" already exists, looking up UUID`, this.verbosity);
+      const combinedOutput = (errorMessage + ' ' + errorStr).toLowerCase();
+      if (
+        combinedOutput.includes('already exists') ||
+        combinedOutput.includes('exists')
+      ) {
+        logger.verbose(
+          `Folder "${name}" already exists, looking up UUID`,
+          this.verbosity,
+        );
         return await this.findFolderInParent(parentUuid, name);
       }
 
-      logger.verbose(`Failed to create folder "${name}": ${errorMessage}`, this.verbosity);
+      logger.verbose(
+        `Failed to create folder "${name}": ${errorMessage}`,
+        this.verbosity,
+      );
       if (errorStr && errorStr !== errorMessage) {
         logger.verbose(`Stderr: ${errorStr}`, this.verbosity);
       }
@@ -152,25 +187,26 @@ export class InternxtService {
    */
   private async ensureFolderPath(remotePath: string): Promise<string | null> {
     // Normalize path
-    const normalizedPath = remotePath === "/" ? "" : remotePath.replace(/\/+$/, "");
-    
+    const normalizedPath =
+      remotePath === '/' ? '' : remotePath.replace(/\/+$/, '');
+
     // Check cache first
     if (this.folderUuidCache.has(normalizedPath)) {
       return this.folderUuidCache.get(normalizedPath)!;
     }
 
     // Handle root path
-    if (!normalizedPath || normalizedPath === "/") {
+    if (!normalizedPath || normalizedPath === '/') {
       const rootUuid = await this.getRootFolderUuid();
       if (rootUuid) {
-        this.folderUuidCache.set("", rootUuid);
+        this.folderUuidCache.set('', rootUuid);
       }
       return rootUuid;
     }
 
     // Split path into segments
-    const segments = normalizedPath.split("/").filter(s => s.length > 0);
-    
+    const segments = normalizedPath.split('/').filter((s) => s.length > 0);
+
     // Start from root
     let currentUuid = await this.getRootFolderUuid();
     if (!currentUuid) {
@@ -178,7 +214,7 @@ export class InternxtService {
     }
 
     // Build up the path segment by segment
-    let currentPath = "";
+    let currentPath = '';
     for (const segment of segments) {
       currentPath = currentPath ? `${currentPath}/${segment}` : segment;
 
@@ -190,7 +226,7 @@ export class InternxtService {
 
       // Try to find existing folder
       let folderUuid = await this.findFolderInParent(currentUuid, segment);
-      
+
       if (!folderUuid) {
         // Create the folder
         folderUuid = await this.createSingleFolder(currentUuid, segment);
@@ -202,7 +238,10 @@ export class InternxtService {
       }
 
       if (!folderUuid) {
-        logger.verbose(`Failed to resolve or create folder segment: ${segment}`, this.verbosity);
+        logger.verbose(
+          `Failed to resolve or create folder segment: ${segment}`,
+          this.verbosity,
+        );
         return null;
       }
 
@@ -219,21 +258,22 @@ export class InternxtService {
    */
   private async resolveFolderUuid(remotePath: string): Promise<string | null> {
     // Normalize path
-    const normalizedPath = remotePath === "/" ? "" : remotePath.replace(/\/+$/, "");
-    
+    const normalizedPath =
+      remotePath === '/' ? '' : remotePath.replace(/\/+$/, '');
+
     // Check cache first
     if (this.folderUuidCache.has(normalizedPath)) {
       return this.folderUuidCache.get(normalizedPath)!;
     }
 
     // Handle root path
-    if (!normalizedPath || normalizedPath === "/") {
+    if (!normalizedPath || normalizedPath === '/') {
       return await this.getRootFolderUuid();
     }
 
     // Split path into segments
-    const segments = normalizedPath.split("/").filter(s => s.length > 0);
-    
+    const segments = normalizedPath.split('/').filter((s) => s.length > 0);
+
     // Start from root
     let currentUuid = await this.getRootFolderUuid();
     if (!currentUuid) {
@@ -241,7 +281,7 @@ export class InternxtService {
     }
 
     // Walk the path
-    let currentPath = "";
+    let currentPath = '';
     for (const segment of segments) {
       currentPath = currentPath ? `${currentPath}/${segment}` : segment;
 
@@ -271,47 +311,51 @@ export class InternxtService {
   async checkCLI(): Promise<InternxtCLICheckResult> {
     try {
       // Check if internxt command exists
-      const { stdout: versionOutput } = await execAsync("internxt --version").catch(() => ({ stdout: "" }));
+      const { stdout: versionOutput } = await execAsync(
+        'internxt --version',
+      ).catch(() => ({ stdout: '' }));
       const version = versionOutput.trim();
 
       if (!version) {
         return {
           installed: false,
           authenticated: false,
-          error: "Internxt CLI not found. Please install it with: npm install -g @internxt/cli"
+          error:
+            'Internxt CLI not found. Please install it with: npm install -g @internxt/cli',
         };
       }
 
       // Check if authenticated using whoami
       try {
-        const { stdout: whoamiOutput } = await execAsync("internxt whoami");
-        if (whoamiOutput.toLowerCase().includes("logged in")) {
+        const { stdout: whoamiOutput } = await execAsync('internxt whoami');
+        if (whoamiOutput.toLowerCase().includes('logged in')) {
           return {
             installed: true,
             authenticated: true,
-            version
+            version,
           };
         }
         return {
           installed: true,
           authenticated: false,
           version,
-          error: "Not authenticated. Please run: internxt login"
+          error: 'Not authenticated. Please run: internxt login',
         };
       } catch (authError) {
         return {
           installed: true,
           authenticated: false,
           version,
-          error: "Not authenticated. Please run: internxt login"
+          error: 'Not authenticated. Please run: internxt login',
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         installed: false,
         authenticated: false,
-        error: `Failed to check Internxt CLI: ${errorMessage}`
+        error: `Failed to check Internxt CLI: ${errorMessage}`,
       };
     }
   }
@@ -319,13 +363,17 @@ export class InternxtService {
   /**
    * Upload a file to Internxt Drive
    */
-  async uploadFile(localPath: string, remotePath: string): Promise<InternxtUploadResult> {
+  async uploadFile(
+    localPath: string,
+    remotePath: string,
+  ): Promise<InternxtUploadResult> {
     try {
       logger.verbose(`Uploading ${localPath} to ${remotePath}`, this.verbosity);
 
       // Extract parent folder and filename
-      const lastSlashIndex = remotePath.lastIndexOf("/");
-      const folderPath = lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : "/";
+      const lastSlashIndex = remotePath.lastIndexOf('/');
+      const folderPath =
+        lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : '/';
       const fileName = remotePath.substring(lastSlashIndex + 1);
 
       // Ensure the parent folder exists and get its UUID
@@ -335,20 +383,27 @@ export class InternxtService {
           success: false,
           filePath: localPath,
           remotePath,
-          error: `Failed to resolve or create folder: ${folderPath}`
+          error: `Failed to resolve or create folder: ${folderPath}`,
         };
       }
 
       // Try to upload the file
-      const result = await this.tryUploadFile(localPath, remotePath, folderUuid);
+      const result = await this.tryUploadFile(
+        localPath,
+        remotePath,
+        folderUuid,
+      );
 
       // If file already exists, delete it and retry
-      if (!result.success && result.error === "File already exists") {
-        logger.verbose(`File already exists at ${remotePath}, replacing...`, this.verbosity);
+      if (!result.success && result.error === 'File already exists') {
+        logger.verbose(
+          `File already exists at ${remotePath}, replacing...`,
+          this.verbosity,
+        );
         const existingFile = await this.findFileInFolder(folderUuid, fileName);
         if (existingFile) {
           await execAsync(
-            `internxt delete-permanently-file --id=${this.shellEscape(existingFile.uuid)} --non-interactive`
+            `internxt delete-permanently-file --id=${this.shellEscape(existingFile.uuid)} --non-interactive`,
           );
         }
         return await this.tryUploadFile(localPath, remotePath, folderUuid);
@@ -356,12 +411,13 @@ export class InternxtService {
 
       return result;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         success: false,
         filePath: localPath,
         remotePath,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -369,10 +425,14 @@ export class InternxtService {
   /**
    * Attempt a single file upload via CLI
    */
-  private async tryUploadFile(localPath: string, remotePath: string, folderUuid: string): Promise<InternxtUploadResult> {
+  private async tryUploadFile(
+    localPath: string,
+    remotePath: string,
+    folderUuid: string,
+  ): Promise<InternxtUploadResult> {
     try {
       const { stdout } = await execAsync(
-        `internxt upload-file --file=${this.shellEscape(localPath)} --destination=${this.shellEscape(folderUuid)} --json --non-interactive`
+        `internxt upload-file --file=${this.shellEscape(localPath)} --destination=${this.shellEscape(folderUuid)} --json --non-interactive`,
       );
 
       const response = JSON.parse(stdout);
@@ -381,7 +441,7 @@ export class InternxtService {
           success: false,
           filePath: localPath,
           remotePath,
-          error: response.message || "Upload failed"
+          error: response.message || 'Upload failed',
         };
       }
 
@@ -389,26 +449,26 @@ export class InternxtService {
         success: true,
         filePath: localPath,
         remotePath,
-        output: response.message
+        output: response.message,
       };
     } catch (error) {
       // Parse JSON error from CLI stderr/stdout
       const errorObj = error as Error & { stderr?: string; stdout?: string };
-      const output = errorObj.stderr || errorObj.stdout || "";
+      const output = errorObj.stderr || errorObj.stdout || '';
       try {
         const response = JSON.parse(output);
         return {
           success: false,
           filePath: localPath,
           remotePath,
-          error: response.message || "Upload failed"
+          error: response.message || 'Upload failed',
         };
       } catch {
         return {
           success: false,
           filePath: localPath,
           remotePath,
-          error: output || errorObj.message || "Upload failed"
+          error: output || errorObj.message || 'Upload failed',
         };
       }
     }
@@ -421,16 +481,20 @@ export class InternxtService {
   async uploadFileWithProgress(
     localPath: string,
     remotePath: string,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
   ): Promise<InternxtUploadResult> {
     return new Promise(async (resolve) => {
       try {
-        logger.verbose(`Uploading with progress: ${localPath} to ${remotePath}`, this.verbosity);
+        logger.verbose(
+          `Uploading with progress: ${localPath} to ${remotePath}`,
+          this.verbosity,
+        );
 
         // Extract parent folder and filename
-        const lastSlashIndex = remotePath.lastIndexOf("/");
-        const folderPath = lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : "/";
-        
+        const lastSlashIndex = remotePath.lastIndexOf('/');
+        const folderPath =
+          lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : '/';
+
         // Ensure the parent folder exists and get its UUID
         const folderUuid = await this.ensureFolderPath(folderPath);
         if (!folderUuid) {
@@ -438,20 +502,31 @@ export class InternxtService {
             success: false,
             filePath: localPath,
             remotePath,
-            error: `Failed to resolve or create folder: ${folderPath}`
+            error: `Failed to resolve or create folder: ${folderPath}`,
           });
           return;
         }
 
         // Use spawn for streaming output with UUID-based API
-        const child = spawn("internxt", ["upload-file", "--file", localPath, "--destination", folderUuid, "--non-interactive"], {
-          stdio: ["ignore", "pipe", "pipe"]
-        });
+        const child = spawn(
+          'internxt',
+          [
+            'upload-file',
+            '--file',
+            localPath,
+            '--destination',
+            folderUuid,
+            '--non-interactive',
+          ],
+          {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          },
+        );
 
-        let output = "";
-        let errorOutput = "";
+        let output = '';
+        let errorOutput = '';
 
-        child.stdout.on("data", (data) => {
+        child.stdout.on('data', (data) => {
           const chunk = data.toString();
           output += chunk;
 
@@ -464,19 +539,19 @@ export class InternxtService {
           }
         });
 
-        child.stderr.on("data", (data) => {
+        child.stderr.on('data', (data) => {
           errorOutput += data.toString();
         });
 
-        child.on("close", (code) => {
+        child.on('close', (code) => {
           const fullOutput = output + errorOutput;
 
-          if (code === 0 && !fullOutput.toLowerCase().includes("error")) {
+          if (code === 0 && !fullOutput.toLowerCase().includes('error')) {
             resolve({
               success: true,
               filePath: localPath,
               remotePath,
-              output: fullOutput
+              output: fullOutput,
             });
           } else {
             resolve({
@@ -484,26 +559,27 @@ export class InternxtService {
               filePath: localPath,
               remotePath,
               output: fullOutput,
-              error: fullOutput || `Process exited with code ${code}`
+              error: fullOutput || `Process exited with code ${code}`,
             });
           }
         });
 
-        child.on("error", (error: Error) => {
+        child.on('error', (error: Error) => {
           resolve({
             success: false,
             filePath: localPath,
             remotePath,
-            error: error.message
+            error: error.message,
           });
         });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         resolve({
           success: false,
           filePath: localPath,
           remotePath,
-          error: errorMessage
+          error: errorMessage,
         });
       }
     });
@@ -523,21 +599,22 @@ export class InternxtService {
         return {
           success: false,
           path: remotePath,
-          error: `Failed to create folder: ${remotePath}`
+          error: `Failed to create folder: ${remotePath}`,
         };
       }
 
       return {
         success: true,
         path: remotePath,
-        output: `Folder created with UUID: ${folderUuid}`
+        output: `Folder created with UUID: ${folderUuid}`,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         success: false,
         path: remotePath,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -545,7 +622,7 @@ export class InternxtService {
   /**
    * List files in a remote folder
    */
-  async listFiles(remotePath: string = "/"): Promise<InternxtListResult> {
+  async listFiles(remotePath: string = '/'): Promise<InternxtListResult> {
     try {
       logger.verbose(`Listing files in: ${remotePath}`, this.verbosity);
 
@@ -555,7 +632,7 @@ export class InternxtService {
         return {
           success: false,
           files: [],
-          error: `Folder not found: ${remotePath}`
+          error: `Folder not found: ${remotePath}`,
         };
       }
 
@@ -564,35 +641,42 @@ export class InternxtService {
 
       // Map to InternxtFileInfo format
       const fileInfos: InternxtFileInfo[] = [
-        ...folders.map(folder => ({
+        ...folders.map((folder) => ({
           name: folder.plainName,
-          path: remotePath === "/" ? `/${folder.plainName}` : `${remotePath}/${folder.plainName}`,
+          path:
+            remotePath === '/'
+              ? `/${folder.plainName}`
+              : `${remotePath}/${folder.plainName}`,
           size: 0,
           isFolder: true,
-          uuid: folder.uuid
+          uuid: folder.uuid,
         })),
-        ...files.map(file => {
-          const fullName = file.type ? `${file.plainName}.${file.type}` : file.plainName;
+        ...files.map((file) => {
+          const fullName = file.type
+            ? `${file.plainName}.${file.type}`
+            : file.plainName;
           return {
             name: fullName,
-            path: remotePath === "/" ? `/${fullName}` : `${remotePath}/${fullName}`,
+            path:
+              remotePath === '/' ? `/${fullName}` : `${remotePath}/${fullName}`,
             size: file.size,
             isFolder: false,
-            uuid: file.uuid
+            uuid: file.uuid,
           };
-        })
+        }),
       ];
 
       return {
         success: true,
-        files: fileInfos
+        files: fileInfos,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
         success: false,
         files: [],
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -601,8 +685,9 @@ export class InternxtService {
    * Check if a file exists in Internxt Drive
    */
   async fileExists(remotePath: string): Promise<boolean> {
-    const parentPath = remotePath.substring(0, remotePath.lastIndexOf("/")) || "/";
-    const fileName = remotePath.substring(remotePath.lastIndexOf("/") + 1);
+    const parentPath =
+      remotePath.substring(0, remotePath.lastIndexOf('/')) || '/';
+    const fileName = remotePath.substring(remotePath.lastIndexOf('/') + 1);
 
     // Resolve parent folder UUID (read-only)
     const folderUuid = await this.resolveFolderUuid(parentPath);
@@ -623,12 +708,16 @@ export class InternxtService {
       logger.verbose(`Deleting file: ${remotePath}`, this.verbosity);
 
       // Resolve parent folder UUID (read-only)
-      const parentPath = remotePath.substring(0, remotePath.lastIndexOf("/")) || "/";
-      const fileName = remotePath.substring(remotePath.lastIndexOf("/") + 1);
+      const parentPath =
+        remotePath.substring(0, remotePath.lastIndexOf('/')) || '/';
+      const fileName = remotePath.substring(remotePath.lastIndexOf('/') + 1);
 
       const folderUuid = await this.resolveFolderUuid(parentPath);
       if (!folderUuid) {
-        logger.verbose(`Parent folder not found: ${parentPath}`, this.verbosity);
+        logger.verbose(
+          `Parent folder not found: ${parentPath}`,
+          this.verbosity,
+        );
         return false;
       }
 
@@ -641,11 +730,12 @@ export class InternxtService {
 
       // Delete using UUID-based API
       await execAsync(
-        `internxt delete-permanently-file --id=${this.shellEscape(file.uuid)} --non-interactive`
+        `internxt delete-permanently-file --id=${this.shellEscape(file.uuid)} --non-interactive`,
       );
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.verbose(`Failed to delete file: ${errorMessage}`, this.verbosity);
       return false;
     }

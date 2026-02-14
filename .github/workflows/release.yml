@@ -4,7 +4,7 @@ on:
   # Trigger when semantic-release workflow completes
   # This works around the limitation where GITHUB_TOKEN events don't trigger workflows
   workflow_run:
-    workflows: ["Semantic Release"]
+    workflows: ['Semantic Release']
     types:
       - completed
   # Keep push trigger as fallback for manual tag pushes (e.g., with PAT)
@@ -41,7 +41,7 @@ jobs:
             echo "should_build=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # Handle workflow_run event (triggered by semantic-release)
           # Only proceed if the triggering workflow was successful
           if [[ "$WORKFLOW_CONCLUSION" != "success" ]]; then
@@ -55,7 +55,7 @@ jobs:
           MAX_RETRIES=3
           RETRY_DELAY=5
           MAX_RELEASE_AGE_SECONDS=600  # 10 minutes
-          
+
           # Get the latest release with retry logic
           LATEST_RELEASE=""
           API_SUCCESS=false
@@ -68,14 +68,14 @@ jobs:
             sleep $RETRY_DELAY
             RETRY_DELAY=$((RETRY_DELAY * 2))
           done
-          
+
           if [[ "$API_SUCCESS" != "true" ]]; then
             echo "ERROR: Failed to fetch release from GitHub API after $MAX_RETRIES attempts"
             echo "Last response: $LATEST_RELEASE"
             echo "should_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           if [[ -z "$LATEST_RELEASE" ]] || [[ "$LATEST_RELEASE" == "" ]]; then
             echo "No release found, skipping build"
             echo "should_build=false" >> $GITHUB_OUTPUT
@@ -92,12 +92,12 @@ jobs:
 
           TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
           CREATED_AT=$(echo "$LATEST_RELEASE" | jq -r '.created_at')
-          
+
           # Check if the release was created within the last 10 minutes (to avoid rebuilding old releases)
           RELEASE_TIME=$(date -d "$CREATED_AT" +%s)
           NOW=$(date +%s)
           AGE=$((NOW - RELEASE_TIME))
-          
+
           if [[ $AGE -gt $MAX_RELEASE_AGE_SECONDS ]]; then
             echo "Latest release is older than $MAX_RELEASE_AGE_SECONDS seconds ($AGE seconds), skipping build"
             echo "should_build=false" >> $GITHUB_OUTPUT
@@ -161,7 +161,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-          bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -221,7 +221,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-          bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

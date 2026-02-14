@@ -38,7 +38,7 @@ Use when the total amount of work is unknown (e.g., scanning a directory).
 ```
 
 - Provide animation so the user knows the process hasn't stalled.
-- Include a short description of *what* is happening.
+- Include a short description of _what_ is happening.
 - Replace the spinner with a result line when done:
   ```
   ✔ Scanned 1,247 files in 3.2s
@@ -67,13 +67,13 @@ implements:
 
 **Best practices for progress bars:**
 
-| Guideline | Why |
-|---|---|
-| Refresh at a fixed interval (250 ms) | Avoids flooding the terminal |
-| Use `\r` + clear-to-EOL (`\x1B[K`) | Overwrites in place without scrolling |
-| Intercept stdout/stderr writes | Prevents other log lines from corrupting the bar |
-| Print a final newline when 100% | Leaves a clean terminal after completion |
-| Show a summary line after completion | Tells the user the outcome, not just "done" |
+| Guideline                            | Why                                              |
+| ------------------------------------ | ------------------------------------------------ |
+| Refresh at a fixed interval (250 ms) | Avoids flooding the terminal                     |
+| Use `\r` + clear-to-EOL (`\x1B[K`)   | Overwrites in place without scrolling            |
+| Intercept stdout/stderr writes       | Prevents other log lines from corrupting the bar |
+| Print a final newline when 100%      | Leaves a clean terminal after completion         |
+| Show a summary line after completion | Tells the user the outcome, not just "done"      |
 
 ### 1.4 Multi-Phase Progress
 
@@ -103,15 +103,15 @@ Use a rolling average of recent items to smooth the estimate.
 
 ### 2.1 Three Verbosity Tiers
 
-| Flag | Level | Shows |
-|---|---|---|
-| `--quiet` | Errors only | Failures and final summary |
-| *(default)* | Normal | Progress bar, phase transitions, summary |
-| `--verbose` | Detailed | Per-file operations, timing, debug info |
+| Flag        | Level       | Shows                                    |
+| ----------- | ----------- | ---------------------------------------- |
+| `--quiet`   | Errors only | Failures and final summary               |
+| _(default)_ | Normal      | Progress bar, phase transitions, summary |
+| `--verbose` | Detailed    | Per-file operations, timing, debug info  |
 
 ### 2.2 Respond Within 100 ms
 
-If a command takes >100 ms to produce output, show *something* (a spinner, a
+If a command takes >100 ms to produce output, show _something_ (a spinner, a
 "Starting..." message). Silence feels like a hang.
 
 ### 2.3 Put Critical Info Last
@@ -136,13 +136,13 @@ static result line.
 
 ### 3.1 Semantic Color Mapping
 
-| Color | Usage | Example |
-|---|---|---|
-| Red | Errors | `❌ Failed to upload file.txt` |
-| Yellow | Warnings | `⚠️ 3 files skipped (already compressed)` |
-| Green | Success | `✅ Backup completed` |
-| Blue | Info/status | `ℹ️ Starting daemon mode` |
-| Dim/gray | Secondary info | Timestamps, file paths in verbose mode |
+| Color    | Usage          | Example                                   |
+| -------- | -------------- | ----------------------------------------- |
+| Red      | Errors         | `❌ Failed to upload file.txt`            |
+| Yellow   | Warnings       | `⚠️ 3 files skipped (already compressed)` |
+| Green    | Success        | `✅ Backup completed`                     |
+| Blue     | Info/status    | `ℹ️ Starting daemon mode`                 |
+| Dim/gray | Secondary info | Timestamps, file paths in verbose mode    |
 
 ### 3.2 Respect the Environment
 
@@ -152,9 +152,8 @@ static result line.
 - Respect `TERM=dumb` — disable all formatting.
 
 ```ts
-const useColor = process.stdout.isTTY
-  && !process.env.NO_COLOR
-  && process.env.TERM !== 'dumb';
+const useColor =
+  process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== 'dumb';
 ```
 
 ### 3.3 Don't Over-Color
@@ -169,17 +168,19 @@ harder to read than plain text. Reserve bold for headings and key values.
 ### 4.1 Human-Readable Errors
 
 Bad:
+
 ```
 Error: ENOENT: no such file or directory, open '/mnt/disk/Photos'
 ```
 
 Good:
+
 ```
 ❌ Source directory not found: /mnt/disk/Photos
    Run 'ls /mnt/disk' to check available paths.
 ```
 
-**Pattern:** State *what went wrong* → *why* (if known) → *what to do about it*.
+**Pattern:** State _what went wrong_ → _why_ (if known) → _what to do about it_.
 
 ### 4.2 Errors to stderr
 
@@ -269,11 +270,11 @@ Did you mean: --compress?
 
 ### 6.1 Exit Code Convention
 
-| Code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | General error |
-| `2` | Usage/argument error |
+| Code  | Meaning                       |
+| ----- | ----------------------------- |
+| `0`   | Success                       |
+| `1`   | General error                 |
+| `2`   | Usage/argument error          |
 | `130` | Interrupted (SIGINT / Ctrl+C) |
 
 ### 6.2 Handle Ctrl+C Gracefully
@@ -308,7 +309,7 @@ process.on('SIGINT', () => {
 Bun Shell escapes all interpolated strings by default, preventing injection:
 
 ```ts
-import { $ } from "bun";
+import { $ } from 'bun';
 
 // Safe: userInput is escaped automatically
 const result = await $`internxt upload ${filePath}`.text();
@@ -326,10 +327,10 @@ await $`bash -c "internxt upload ${filePath}"`;
 Use the appropriate method for the data shape:
 
 ```ts
-const text   = await $`command`.text();    // Full output as string
-const lines  = await $`command`.lines();   // Array of lines
-const json   = await $`command`.json();    // Parsed JSON
-const buffer = await $`command`.blob();    // Binary data
+const text = await $`command`.text(); // Full output as string
+const lines = await $`command`.lines(); // Array of lines
+const json = await $`command`.json(); // Parsed JSON
+const buffer = await $`command`.blob(); // Binary data
 ```
 
 ### 7.3 Error Handling with nothrow()
@@ -337,9 +338,7 @@ const buffer = await $`command`.blob();    // Binary data
 For commands where non-zero exit is expected (checking if something exists):
 
 ```ts
-const { exitCode, stdout, stderr } = await $`internxt whoami`
-  .nothrow()
-  .quiet();
+const { exitCode, stdout, stderr } = await $`internxt whoami`.nothrow().quiet();
 
 if (exitCode !== 0) {
   logger.error('Not authenticated. Run: internxt login');
@@ -371,9 +370,9 @@ await $`internxt upload .`.cwd(sourceDir);
 
 ### 8.1 stdout vs stderr
 
-| Stream | Content |
-|---|---|
-| `stdout` | Program output (file lists, JSON, data) |
+| Stream   | Content                                      |
+| -------- | -------------------------------------------- |
+| `stdout` | Program output (file lists, JSON, data)      |
 | `stderr` | Progress bars, spinners, errors, diagnostics |
 
 This allows piping the tool's output without progress bar noise:

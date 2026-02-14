@@ -3,8 +3,8 @@
  * Handles tracking and displaying upload progress
  */
 
-import chalk from "chalk";
-import * as logger from "../../utils/logger";
+import chalk from 'chalk';
+import * as logger from '../../utils/logger';
 
 /**
  * ProgressTracker class for monitoring upload progress
@@ -56,10 +56,15 @@ export class ProgressTracker {
     process.stdout.write = (
       chunk: Uint8Array | string,
       encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void
+      callback?: (err?: Error) => void,
     ): boolean => {
       if (!this.isTrackingActive) {
-        return this.originalStdoutWrite.call(process.stdout, chunk, encodingOrCallback as BufferEncoding, callback);
+        return this.originalStdoutWrite.call(
+          process.stdout,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
       }
 
       // Check if content has newline
@@ -72,7 +77,12 @@ export class ProgressTracker {
       }
 
       // Write the actual content
-      const result = this.originalStdoutWrite.call(process.stdout, chunk, encodingOrCallback as BufferEncoding, callback);
+      const result = this.originalStdoutWrite.call(
+        process.stdout,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
 
       // Only redraw progress bar if content ends with newline
       // This ensures the bar appears on its own line below the message
@@ -88,10 +98,15 @@ export class ProgressTracker {
     process.stderr.write = (
       chunk: Uint8Array | string,
       encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void
+      callback?: (err?: Error) => void,
     ): boolean => {
       if (!this.isTrackingActive) {
-        return this.originalStderrWrite.call(process.stderr, chunk, encodingOrCallback as BufferEncoding, callback);
+        return this.originalStderrWrite.call(
+          process.stderr,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
       }
 
       // Check if content has newline
@@ -104,7 +119,12 @@ export class ProgressTracker {
       }
 
       // Write to stderr
-      const result = this.originalStderrWrite.call(process.stderr, chunk, encodingOrCallback as BufferEncoding, callback);
+      const result = this.originalStderrWrite.call(
+        process.stderr,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
 
       // Only redraw progress bar if content ends with newline
       if (hasNewline) {
@@ -131,10 +151,12 @@ export class ProgressTracker {
    */
   private renderBar(): string {
     const processed = this.completedFiles + this.failedFiles;
-    const percentage = this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
+    const percentage =
+      this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
     const barWidth = 40;
     const completeWidth = Math.floor((percentage / 100) * barWidth);
-    const bar = "█".repeat(completeWidth) + "░".repeat(barWidth - completeWidth);
+    const bar =
+      '█'.repeat(completeWidth) + '░'.repeat(barWidth - completeWidth);
     return `[${bar}] ${percentage}% | ${processed}/${this.totalFiles}`;
   }
 
@@ -229,9 +251,17 @@ export class ProgressTracker {
 
     // Always show the final summary, regardless of verbosity
     if (this.failedFiles === 0) {
-      logger.always(chalk.green(`Upload completed successfully! All ${this.completedFiles} files uploaded.`));
+      logger.always(
+        chalk.green(
+          `Upload completed successfully! All ${this.completedFiles} files uploaded.`,
+        ),
+      );
     } else {
-      logger.always(chalk.yellow(`Upload completed with issues: ${this.completedFiles} succeeded, ${this.failedFiles} failed.`));
+      logger.always(
+        chalk.yellow(
+          `Upload completed with issues: ${this.completedFiles} succeeded, ${this.failedFiles} failed.`,
+        ),
+      );
     }
   }
 
@@ -241,7 +271,9 @@ export class ProgressTracker {
    */
   getProgressPercentage() {
     const processed = this.completedFiles + this.failedFiles;
-    return this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
+    return this.totalFiles > 0
+      ? Math.floor((processed / this.totalFiles) * 100)
+      : 0;
   }
 
   /**
@@ -249,6 +281,9 @@ export class ProgressTracker {
    * @returns {boolean} True if all files have been processed
    */
   isComplete() {
-    return (this.completedFiles + this.failedFiles) === this.totalFiles && this.totalFiles > 0;
+    return (
+      this.completedFiles + this.failedFiles === this.totalFiles &&
+      this.totalFiles > 0
+    );
   }
 }

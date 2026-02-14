@@ -3,12 +3,14 @@
  * Manages the concurrent upload of files to Internxt Drive
  */
 
-import { FileInfo } from "../../interfaces/file-scanner";
-import * as logger from "../../utils/logger";
+import { FileInfo } from '../../interfaces/file-scanner';
+import * as logger from '../../utils/logger';
 
 export class FileUploadManager {
   maxConcurrency: number;
-  uploadHandler: (fileInfo: FileInfo) => Promise<{ success: boolean; filePath: string }>;
+  uploadHandler: (
+    fileInfo: FileInfo,
+  ) => Promise<{ success: boolean; filePath: string }>;
   verbosity: number;
   activeUploads: Set<string>;
   pendingFiles: FileInfo[];
@@ -23,8 +25,10 @@ export class FileUploadManager {
    */
   constructor(
     maxConcurrency: number,
-    uploadHandler: (fileInfo: FileInfo) => Promise<{ success: boolean; filePath: string }>,
-    verbosity: number = logger.Verbosity.Normal
+    uploadHandler: (
+      fileInfo: FileInfo,
+    ) => Promise<{ success: boolean; filePath: string }>,
+    verbosity: number = logger.Verbosity.Normal,
   ) {
     this.maxConcurrency = maxConcurrency;
     this.uploadHandler = uploadHandler;
@@ -41,7 +45,10 @@ export class FileUploadManager {
    */
   setQueue(files: FileInfo[]) {
     this.pendingFiles = [...files];
-    logger.verbose(`Upload manager queue set with ${files.length} files`, this.verbosity);
+    logger.verbose(
+      `Upload manager queue set with ${files.length} files`,
+      this.verbosity,
+    );
   }
 
   /**
@@ -52,10 +59,16 @@ export class FileUploadManager {
     this.completionCallback = onCompletion;
 
     // Log the start message
-    logger.info(`Starting parallel upload with ${this.maxConcurrency} concurrent uploads...`, this.verbosity);
+    logger.info(
+      `Starting parallel upload with ${this.maxConcurrency} concurrent uploads...`,
+      this.verbosity,
+    );
 
     // Start initial batch of uploads
-    const initialBatchSize = Math.min(this.maxConcurrency, this.pendingFiles.length);
+    const initialBatchSize = Math.min(
+      this.maxConcurrency,
+      this.pendingFiles.length,
+    );
     for (let i = 0; i < initialBatchSize; i++) {
       this.processNextFile();
     }
@@ -98,7 +111,10 @@ export class FileUploadManager {
       this.activeUploads.add(uploadId);
 
       // Start the upload
-      logger.verbose(`Starting upload for ${fileInfo.relativePath}`, this.verbosity);
+      logger.verbose(
+        `Starting upload for ${fileInfo.relativePath}`,
+        this.verbosity,
+      );
       this.uploadHandler(fileInfo)
         .then(() => {
           // Upload completed, remove from active uploads
@@ -110,7 +126,9 @@ export class FileUploadManager {
         .catch((error: Error) => {
           // Upload failed, remove from active uploads
           this.activeUploads.delete(uploadId);
-          logger.error(`Upload failed for ${fileInfo.relativePath}: ${error.message}`);
+          logger.error(
+            `Upload failed for ${fileInfo.relativePath}: ${error.message}`,
+          );
 
           // Process next file
           this.processNextFile();
@@ -122,7 +140,10 @@ export class FileUploadManager {
    * Cancel all pending uploads
    */
   cancelAll() {
-    logger.info(`Cancelling ${this.pendingFiles.length} pending uploads`, this.verbosity);
+    logger.info(
+      `Cancelling ${this.pendingFiles.length} pending uploads`,
+      this.verbosity,
+    );
     this.pendingFiles = [];
 
     if (this.checkCompletionInterval) {

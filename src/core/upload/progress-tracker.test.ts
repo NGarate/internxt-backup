@@ -1,11 +1,20 @@
 /**
  * Tests for Progress Tracker
- * 
+ *
  * These tests verify the basic functionality of the ProgressTracker class
  * without depending on external modules like chalk.
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn, jest } from 'bun:test';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  mock,
+  spyOn,
+  jest,
+} from 'bun:test';
 import { ProgressTracker } from './progress-tracker';
 import { Verbosity } from '../../interfaces/logger';
 import * as logger from '../../utils/logger';
@@ -16,8 +25,12 @@ class TestableProgressTracker extends ProgressTracker {
     super(verbosity);
 
     // Override write methods to avoid side effects
-    this.originalStdoutWrite = mock(() => true) as unknown as typeof process.stdout.write;
-    this.originalStderrWrite = mock(() => true) as unknown as typeof process.stderr.write;
+    this.originalStdoutWrite = mock(
+      () => true,
+    ) as unknown as typeof process.stdout.write;
+    this.originalStderrWrite = mock(
+      () => true,
+    ) as unknown as typeof process.stderr.write;
   }
 
   // Mock display methods to avoid actual console output
@@ -34,16 +47,16 @@ describe('ProgressTracker', () => {
   // Save original process.stdout.write
   const originalStdoutWrite = process.stdout.write;
   let loggerSpy;
-  
+
   beforeEach(() => {
     jest.useFakeTimers();
     // Mock process.stdout.write
     process.stdout.write = mock(() => {});
-    
+
     // Spy on logger to avoid console output during tests
     loggerSpy = spyOn(logger, 'always').mockImplementation(() => {});
   });
-  
+
   afterEach(() => {
     if (jest.isFakeTimers()) {
       jest.clearAllTimers();
@@ -51,66 +64,66 @@ describe('ProgressTracker', () => {
     }
     // Restore original process.stdout.write
     process.stdout.write = originalStdoutWrite;
-    
+
     // Restore original logger
     loggerSpy.mockRestore();
   });
-  
+
   describe('Basic functionality', () => {
     it('should initialize with default values', () => {
       const tracker = new TestableProgressTracker();
-      
+
       expect(tracker.totalFiles).toBe(0);
       expect(tracker.completedFiles).toBe(0);
       expect(tracker.failedFiles).toBe(0);
     });
   });
-  
+
   describe('Configuration', () => {
     it('should initialize with the provided total files', () => {
       const tracker = new TestableProgressTracker();
-      
+
       tracker.initialize(10);
-      
+
       expect(tracker.totalFiles).toBe(10);
       expect(tracker.completedFiles).toBe(0);
       expect(tracker.failedFiles).toBe(0);
     });
   });
-  
+
   describe('Progress tracking', () => {
     it('should increment counters correctly', () => {
       const tracker = new TestableProgressTracker();
       tracker.initialize(10);
-      
+
       tracker.recordSuccess();
       expect(tracker.completedFiles).toBe(1);
-      
+
       tracker.recordFailure();
       expect(tracker.failedFiles).toBe(1);
     });
-    
+
     it('should calculate progress correctly', () => {
       const tracker = new TestableProgressTracker();
       tracker.initialize(10);
       tracker.completedFiles = 7;
-      
+
       expect(tracker.getProgressPercentage()).toBe(70);
     });
-    
+
     it('should determine completion status correctly', () => {
       const tracker = new TestableProgressTracker();
       tracker.initialize(10);
-      
+
       expect(tracker.isComplete()).toBe(false);
-      
+
       tracker.completedFiles = 8;
       tracker.failedFiles = 2;
-      
+
       expect(tracker.isComplete()).toBe(true);
     });
   });
-  
+
   describe('Progress updates', () => {
     it('should start and stop progress updates', () => {
       const tracker = new TestableProgressTracker();
@@ -145,4 +158,4 @@ describe('ProgressTracker', () => {
       expect(displaySpy).toHaveBeenCalledTimes(3); // Still 3, not 4
     });
   });
-}); 
+});

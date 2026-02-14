@@ -1,6 +1,6 @@
 /**
  * WebDAV Client Mock
- * 
+ *
  * This file provides a mock implementation of a WebDAV client
  * for use in tests.
  */
@@ -27,17 +27,17 @@ export function createClient(config = {}) {
     customRequest: [],
     checkServerCompatibility: [],
     getFreeSpace: [],
-    getUsedSpace: []
+    getUsedSpace: [],
   };
 
   // Base mock client with common methods
   const mockClient = {
     // Configuration stored for inspection in tests
     config: config,
-    
+
     // Track all calls for test verification
     calls,
-    
+
     // File operations
     putFileContents: (path, data, options = {}) => {
       calls.putFileContents.push({ path, options });
@@ -46,7 +46,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve(mockClient.putFileResponse || { status: 201 });
     },
-    
+
     getFileContents: (path, options = {}) => {
       calls.getFileContents.push({ path, options });
       if (mockClient.getFileResult === false) {
@@ -54,7 +54,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve(mockClient.getFileResponse || 'file content');
     },
-    
+
     // Directory operations
     getDirectoryContents: (path) => {
       calls.getDirectoryContents.push(path);
@@ -63,18 +63,21 @@ export function createClient(config = {}) {
       }
       return Promise.resolve(mockClient.directoryContents || []);
     },
-    
+
     createDirectory: (path, options = {}) => {
       calls.createDirectory.push(path);
       if (mockClient.createDirectoryResult === false) {
-        if (mockClient.createDirectoryErrors && mockClient.createDirectoryErrors[path]) {
+        if (
+          mockClient.createDirectoryErrors &&
+          mockClient.createDirectoryErrors[path]
+        ) {
           return Promise.reject(mockClient.createDirectoryErrors[path]);
         }
         return Promise.reject(new Error('Failed to create directory'));
       }
       return Promise.resolve({ status: 201 });
     },
-    
+
     deleteFile: (path) => {
       calls.deleteFile.push(path);
       if (mockClient.deleteFileResult === false) {
@@ -82,7 +85,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve({ status: 204 });
     },
-    
+
     deleteDirectory: (path) => {
       calls.deleteDirectory.push(path);
       if (mockClient.deleteDirectoryResult === false) {
@@ -90,7 +93,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve({ status: 204 });
     },
-    
+
     // Utility operations
     moveFile: (fromPath, toPath, options = {}) => {
       calls.moveFile.push({ fromPath, toPath, options });
@@ -99,7 +102,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve({ status: 201 });
     },
-    
+
     copyFile: (fromPath, toPath, options = {}) => {
       calls.copyFile.push({ fromPath, toPath, options });
       if (mockClient.copyFileResult === false) {
@@ -107,7 +110,7 @@ export function createClient(config = {}) {
       }
       return Promise.resolve({ status: 201 });
     },
-    
+
     exists: (path) => {
       calls.exists.push(path);
       if (mockClient.existsResult === false) {
@@ -115,47 +118,55 @@ export function createClient(config = {}) {
       }
       return Promise.resolve(mockClient.existsResponse || true);
     },
-    
+
     stat: (path) => {
       calls.stat.push(path);
       if (mockClient.statResult === false) {
         return Promise.reject(new Error('Failed to stat resource'));
       }
-      return Promise.resolve(mockClient.statResponse || { 
-        type: 'file',
-        filename: path,
-        size: 1024,
-        lastmod: new Date().toISOString()
-      });
+      return Promise.resolve(
+        mockClient.statResponse || {
+          type: 'file',
+          filename: path,
+          size: 1024,
+          lastmod: new Date().toISOString(),
+        },
+      );
     },
-    
+
     getQuota: () => {
       calls.getQuota.push({});
       if (mockClient.getQuotaResult === false) {
         return Promise.reject(new Error('Failed to get quota'));
       }
-      return Promise.resolve(mockClient.getQuotaData || { 
-        used: 1024, 
-        available: 1024 * 1024 
-      });
+      return Promise.resolve(
+        mockClient.getQuotaData || {
+          used: 1024,
+          available: 1024 * 1024,
+        },
+      );
     },
-    
+
     getDAVCompliance: () => {
       calls.getDAVCompliance.push({});
       if (mockClient.getDAVComplianceResult === false) {
         return Promise.reject(new Error('Failed to get DAV compliance'));
       }
-      return Promise.resolve(mockClient.getDAVComplianceData || ['1', '2', '3']);
+      return Promise.resolve(
+        mockClient.getDAVComplianceData || ['1', '2', '3'],
+      );
     },
-    
+
     customRequest: (path, options = {}) => {
       calls.customRequest.push({ path, options });
       if (mockClient.customRequestResult === false) {
         return Promise.reject(new Error('Failed custom request'));
       }
-      return Promise.resolve(mockClient.customRequestResponse || { status: 200 });
+      return Promise.resolve(
+        mockClient.customRequestResponse || { status: 200 },
+      );
     },
-    
+
     // Stream operations
     createReadStream: (path, options = {}) => {
       // Return a mock readable stream
@@ -173,11 +184,11 @@ export function createClient(config = {}) {
           return mockReadable;
         },
         pipe: () => mockReadable,
-        destroy: () => {}
+        destroy: () => {},
       };
       return mockReadable;
     },
-    
+
     createWriteStream: (path, options = {}) => {
       // Return a mock writable stream
       const mockWritable = {
@@ -192,41 +203,41 @@ export function createClient(config = {}) {
         },
         write: (data) => true,
         end: () => {},
-        destroy: () => {}
+        destroy: () => {},
       };
       return mockWritable;
     },
-    
+
     // Additional methods
     setHeaders: (headers) => {
       mockClient.config.headers = headers;
       return mockClient;
     },
-    
+
     getHeaders: () => {
       return mockClient.config.headers || {};
     },
-    
+
     getFileDownloadLink: (path) => {
       return `${mockClient.config.remoteURL || 'https://example.com'}/${path}`;
     },
-    
+
     getFileUploadLink: (path) => {
       return `${mockClient.config.remoteURL || 'https://example.com'}/${path}`;
     },
-    
+
     search: (path, query, options = {}) => {
       return Promise.resolve([]);
     },
-    
+
     lock: (path, options = {}) => {
       return Promise.resolve({ token: 'mock-lock-token' });
     },
-    
+
     unlock: (path, token) => {
       return Promise.resolve(true);
     },
-    
+
     partialUpdateFileContents: (path, data, options = {}) => {
       return Promise.resolve({ status: 200 });
     },
@@ -235,12 +246,16 @@ export function createClient(config = {}) {
     checkServerCompatibility: () => {
       calls.checkServerCompatibility.push({});
       if (mockClient.checkServerCompatibilityResult === false) {
-        return Promise.reject(new Error('Failed to check server compatibility'));
+        return Promise.reject(
+          new Error('Failed to check server compatibility'),
+        );
       }
-      return Promise.resolve(mockClient.checkServerCompatibilityData || {
-        version: '1.0',
-        capabilities: ['1', '2', '3']
-      });
+      return Promise.resolve(
+        mockClient.checkServerCompatibilityData || {
+          version: '1.0',
+          capabilities: ['1', '2', '3'],
+        },
+      );
     },
 
     getFreeSpace: () => {
@@ -257,7 +272,7 @@ export function createClient(config = {}) {
         return Promise.reject(new Error('Failed to get used space'));
       }
       return Promise.resolve(mockClient.getUsedSpaceData || 1024);
-    }
+    },
   };
 
   // Default result flags for test control
@@ -279,17 +294,17 @@ export function createClient(config = {}) {
   mockClient.checkServerCompatibilityResult = true;
   mockClient.getFreeSpaceResult = true;
   mockClient.getUsedSpaceResult = true;
-  
+
   // Store config for test inspection
   mockClient.config = config;
-  
+
   return mockClient;
 }
 
 // Default export for compatibility
 export default {
-  createClient
+  createClient,
 };
 
 // Named exports for direct access
-export { createClient as createWebDAVClient }; 
+export { createClient as createWebDAVClient };

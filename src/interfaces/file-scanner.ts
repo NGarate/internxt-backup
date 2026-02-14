@@ -39,4 +39,4 @@ export interface FileScannerInterface {
   updateFileState(relativePath: string, checksum: string): void;
   recordCompletion(): void;
   saveState(): Promise<void>;
-} 
+}

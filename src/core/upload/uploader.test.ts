@@ -7,7 +7,12 @@ import Uploader from '../upload/uploader';
 import { HashCache } from './hash-cache';
 import { Verbosity } from '../../interfaces/logger';
 import * as logger from '../../utils/logger';
-import { createMockInternxtService, createMockFileScanner, createMockFileInfo, createMockLoggers } from '../../../test-config/mocks/test-helpers';
+import {
+  createMockInternxtService,
+  createMockFileScanner,
+  createMockFileInfo,
+  createMockLoggers,
+} from '../../../test-config/mocks/test-helpers';
 
 describe('Uploader', () => {
   // Test data
@@ -118,13 +123,14 @@ describe('Uploader', () => {
 
       // Create custom mock that returns failure
       const failingInternxtService = createMockInternxtService();
-      failingInternxtService.uploadFile = () => Promise.resolve({
-        success: false,
-        filePath: '/local/path',
-        remotePath: '/remote/path',
-        output: 'Upload failed',
-        error: 'Upload failed'
-      });
+      failingInternxtService.uploadFile = () =>
+        Promise.resolve({
+          success: false,
+          filePath: '/local/path',
+          remotePath: '/remote/path',
+          output: 'Upload failed',
+          error: 'Upload failed',
+        });
 
       // Replace service directly
       (uploader as any).internxtService = failingInternxtService;
@@ -145,7 +151,9 @@ describe('Uploader', () => {
 
       // Create custom mock that throws error
       const errorInternxtService = createMockInternxtService();
-      errorInternxtService.uploadFile = () => { throw new Error('Test error'); };
+      errorInternxtService.uploadFile = () => {
+        throw new Error('Test error');
+      };
 
       // Replace service directly
       (uploader as any).internxtService = errorInternxtService;
@@ -191,7 +199,7 @@ describe('Uploader', () => {
       // Create test file info array
       const files = [
         createMockFileInfo('source/file1.txt'),
-        createMockFileInfo('source/file2.txt')
+        createMockFileInfo('source/file2.txt'),
       ];
 
       // Test upload process
@@ -207,11 +215,12 @@ describe('Uploader', () => {
 
       // Create custom mock with CLI not installed
       const noCLIService = createMockInternxtService();
-      noCLIService.checkCLI = () => Promise.resolve({
-        installed: false,
-        authenticated: false,
-        error: 'CLI not found'
-      });
+      noCLIService.checkCLI = () =>
+        Promise.resolve({
+          installed: false,
+          authenticated: false,
+          error: 'CLI not found',
+        });
 
       // Replace service directly
       (uploader as any).internxtService = noCLIService;
@@ -229,11 +238,12 @@ describe('Uploader', () => {
 
       // Create custom mock with CLI not authenticated
       const notAuthService = createMockInternxtService();
-      notAuthService.checkCLI = () => Promise.resolve({
-        installed: true,
-        authenticated: false,
-        error: 'Not authenticated'
-      });
+      notAuthService.checkCLI = () =>
+        Promise.resolve({
+          installed: true,
+          authenticated: false,
+          error: 'Not authenticated',
+        });
 
       // Replace service directly
       (uploader as any).internxtService = notAuthService;
@@ -250,7 +260,7 @@ describe('Uploader', () => {
     it('should initialize with compression enabled', () => {
       const uploader = new Uploader(concurrentUploads, targetDir, verbosity, {
         compress: true,
-        compressionLevel: 6
+        compressionLevel: 6,
       });
 
       expect(typeof uploader.handleFileUpload).toBe('function');
@@ -259,7 +269,7 @@ describe('Uploader', () => {
     it('should initialize with resume enabled', () => {
       const uploader = new Uploader(concurrentUploads, targetDir, verbosity, {
         resume: true,
-        chunkSize: 50
+        chunkSize: 50,
       });
 
       expect(typeof uploader.handleFileUpload).toBe('function');
@@ -279,7 +289,10 @@ describe('Uploader', () => {
 
       await uploader.handleFileUpload(fileInfo);
 
-      expect(updateHashSpy).toHaveBeenCalledWith(fileInfo.absolutePath, fileInfo.checksum);
+      expect(updateHashSpy).toHaveBeenCalledWith(
+        fileInfo.absolutePath,
+        fileInfo.checksum,
+      );
     });
 
     it('should save hash cache after recording hash on successful upload', async () => {
@@ -288,8 +301,13 @@ describe('Uploader', () => {
 
       const hashCache: HashCache = (uploader as any).hashCache;
       const callOrder: string[] = [];
-      spyOn(hashCache, 'updateHash').mockImplementation(() => { callOrder.push('updateHash'); });
-      spyOn(hashCache, 'save').mockImplementation(() => { callOrder.push('save'); return Promise.resolve(true); });
+      spyOn(hashCache, 'updateHash').mockImplementation(() => {
+        callOrder.push('updateHash');
+      });
+      spyOn(hashCache, 'save').mockImplementation(() => {
+        callOrder.push('save');
+        return Promise.resolve(true);
+      });
 
       const fileInfo = createMockFileInfo('source/test.txt');
       await uploader.handleFileUpload(fileInfo);
@@ -301,13 +319,14 @@ describe('Uploader', () => {
       const uploader = new Uploader(concurrentUploads, targetDir, verbosity);
 
       const failingService = createMockInternxtService();
-      failingService.uploadFile = () => Promise.resolve({
-        success: false,
-        filePath: '/local/path',
-        remotePath: '/remote/path',
-        output: 'Upload failed',
-        error: 'Upload failed'
-      });
+      failingService.uploadFile = () =>
+        Promise.resolve({
+          success: false,
+          filePath: '/local/path',
+          remotePath: '/remote/path',
+          output: 'Upload failed',
+          error: 'Upload failed',
+        });
       (uploader as any).internxtService = failingService;
 
       const hashCache: HashCache = (uploader as any).hashCache;
@@ -325,7 +344,9 @@ describe('Uploader', () => {
       (uploader as any).internxtService = mockInternxtService;
 
       const hashCache: HashCache = (uploader as any).hashCache;
-      const loadSpy = spyOn(hashCache, 'load').mockImplementation(() => Promise.resolve(true));
+      const loadSpy = spyOn(hashCache, 'load').mockImplementation(() =>
+        Promise.resolve(true),
+      );
 
       await uploader.startUpload([]);
 
@@ -357,7 +378,7 @@ describe('Uploader', () => {
 
       // Mock calculateHash to return the same checksum the cache has stored
       spyOn(hashCache, 'calculateHash').mockImplementation(() =>
-        Promise.resolve(fileInfo.checksum)
+        Promise.resolve(fileInfo.checksum),
       );
 
       const result2 = await uploader.handleFileUpload(fileInfo2);

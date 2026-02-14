@@ -4,12 +4,12 @@
  * Optimized for Bun's runtime for maximum performance
  */
 
-import chalk from "chalk";
-import { getOptimalConcurrency } from "./utils/env-utils";
-import * as logger from "./utils/logger";
-import FileScanner from "./core/file-scanner";
-import Uploader from "./core/upload/uploader";
-import { InternxtService } from "./core/internxt/internxt-service";
+import chalk from 'chalk';
+import { getOptimalConcurrency } from './utils/env-utils';
+import * as logger from './utils/logger';
+import FileScanner from './core/file-scanner';
+import Uploader from './core/upload/uploader';
+import { InternxtService } from './core/internxt/internxt-service';
 
 // Define options interface for better type checking
 export interface SyncOptions {
@@ -27,7 +27,10 @@ export interface SyncOptions {
 /**
  * Main synchronization function that can be called from CLI or programmatically
  */
-export async function syncFiles(sourceDir: string, options: SyncOptions): Promise<void> {
+export async function syncFiles(
+  sourceDir: string,
+  options: SyncOptions,
+): Promise<void> {
   try {
     // Determine verbosity level using the Verbosity enum
     let verbosity: logger.Verbosity;
@@ -40,21 +43,21 @@ export async function syncFiles(sourceDir: string, options: SyncOptions): Promis
     }
 
     // Check Internxt CLI status
-    logger.info("Checking Internxt CLI...", verbosity);
+    logger.info('Checking Internxt CLI...', verbosity);
     const internxtService = new InternxtService({ verbosity });
     const cliStatus = await internxtService.checkCLI();
 
     if (!cliStatus.installed) {
       throw new Error(
         `Internxt CLI not found. Please install it with: npm install -g @internxt/cli\n` +
-        `Error: ${cliStatus.error}`
+          `Error: ${cliStatus.error}`,
       );
     }
 
     if (!cliStatus.authenticated) {
       throw new Error(
         `Not authenticated with Internxt. Please run: internxt login\n` +
-        `Error: ${cliStatus.error}`
+          `Error: ${cliStatus.error}`,
       );
     }
 
@@ -69,14 +72,14 @@ export async function syncFiles(sourceDir: string, options: SyncOptions): Promis
     // Create uploader
     const uploader = new Uploader(
       concurrentUploads,
-      options.target || "/",
+      options.target || '/',
       verbosity,
       {
         compress: options.compress,
         compressionLevel: options.compressionLevel,
         resume: options.resume,
-        chunkSize: options.chunkSize
-      }
+        chunkSize: options.chunkSize,
+      },
     );
 
     // Link the file scanner to the uploader
@@ -87,7 +90,7 @@ export async function syncFiles(sourceDir: string, options: SyncOptions): Promis
 
     // Start the upload process
     if (scanResult.filesToUpload.length === 0) {
-      logger.success("All files are up to date. Nothing to upload.", verbosity);
+      logger.success('All files are up to date. Nothing to upload.', verbosity);
     } else {
       await uploader.startUpload(scanResult.filesToUpload);
     }

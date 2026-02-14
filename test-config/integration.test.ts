@@ -33,7 +33,11 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { InternxtCLICheckResult, InternxtUploadResult, InternxtFolderResult } from '../src/interfaces/internxt';
+import {
+  InternxtCLICheckResult,
+  InternxtUploadResult,
+  InternxtFolderResult,
+} from '../src/interfaces/internxt';
 import { FileInfo, ScanResult } from '../src/interfaces/file-scanner';
 
 describe('Integration Tests', () => {

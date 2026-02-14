@@ -3,9 +3,9 @@
  * Handles scheduled backups using croner (Bun-compatible cron library)
  */
 
-import { Cron } from "croner";
-import * as logger from "../../utils/logger";
-import { syncFiles, SyncOptions } from "../../file-sync";
+import { Cron } from 'croner';
+import * as logger from '../../utils/logger';
+import { syncFiles, SyncOptions } from '../../file-sync';
 
 export interface BackupConfig {
   sourceDir: string;
@@ -47,12 +47,15 @@ export class BackupScheduler {
       throw new Error(`Invalid cron expression: ${config.schedule}`);
     }
 
-    logger.info(`Starting backup daemon with schedule: ${config.schedule}`, this.verbosity);
+    logger.info(
+      `Starting backup daemon with schedule: ${config.schedule}`,
+      this.verbosity,
+    );
     logger.info(`Source: ${config.sourceDir}`, this.verbosity);
-    logger.info(`Target: ${config.syncOptions.target || "/"}`, this.verbosity);
+    logger.info(`Target: ${config.syncOptions.target || '/'}`, this.verbosity);
 
     // Run initial backup
-    logger.info("Running initial backup...", this.verbosity);
+    logger.info('Running initial backup...', this.verbosity);
     await this.runOnce(config);
 
     // Schedule recurring backups
@@ -62,24 +65,34 @@ export class BackupScheduler {
       config.schedule,
       {
         name: jobId,
-        protect: true // Prevent overlapping executions
+        protect: true, // Prevent overlapping executions
       },
       async () => {
-        logger.info(`Scheduled backup triggered at ${new Date().toISOString()}`, this.verbosity);
+        logger.info(
+          `Scheduled backup triggered at ${new Date().toISOString()}`,
+          this.verbosity,
+        );
 
         try {
           await this.runOnce(config);
-          logger.info("Scheduled backup completed successfully", this.verbosity);
+          logger.info(
+            'Scheduled backup completed successfully',
+            this.verbosity,
+          );
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           logger.error(`Scheduled backup failed: ${errorMessage}`);
         }
-      }
+      },
     );
 
     this.jobs.set(jobId, job);
 
-    logger.success(`Daemon started. Next run: ${job.nextRun()?.toISOString() || "unknown"}`, this.verbosity);
+    logger.success(
+      `Daemon started. Next run: ${job.nextRun()?.toISOString() || 'unknown'}`,
+      this.verbosity,
+    );
 
     // Keep the process alive
     await this.keepAlive();
@@ -99,7 +112,8 @@ export class BackupScheduler {
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       logger.success(`Backup completed in ${duration}s`, this.verbosity);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.error(`Backup failed: ${errorMessage}`);
       throw error;
     }
@@ -146,7 +160,7 @@ export class BackupScheduler {
       id,
       nextRun: job.nextRun(),
       previousRun: job.previousRun(),
-      running: job.isRunning()
+      running: job.isRunning(),
     }));
   }
 
@@ -157,14 +171,14 @@ export class BackupScheduler {
     return new Promise((resolve) => {
       // Handle graceful shutdown
       const shutdown = () => {
-        logger.info("\nShutting down daemon...", this.verbosity);
+        logger.info('\nShutting down daemon...', this.verbosity);
         this.stopAll();
         resolve();
         process.exit(0);
       };
 
-      process.on("SIGINT", shutdown);
-      process.on("SIGTERM", shutdown);
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
 
       // Keep the process running
       setInterval(() => {
