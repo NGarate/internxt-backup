@@ -2,7 +2,7 @@
  * Tests for Uploader
  */
 
-import { expect, describe, beforeEach, it, mock, spyOn } from 'bun:test';
+import { expect, describe, beforeEach, it, spyOn } from 'bun:test';
 import Uploader from '../upload/uploader';
 import { HashCache } from './hash-cache';
 import { Verbosity } from '../../interfaces/logger';

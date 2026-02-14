@@ -74,14 +74,14 @@ describe('Logger Utilities', () => {
   });
 
   describe('error', () => {
-    it('should log error message to stdout', () => {
+    it('should log error message to stderr', () => {
       const message = 'Error message';
 
       logger.error(message);
 
-      // Check that error was written to stdout (same stream for progress bar interception)
-      expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some(output => output.includes(message))).toBe(true);
+      // Check that error was written to stderr
+      expect(stderrOutput.length).toBeGreaterThan(0);
+      expect(stderrOutput.some(output => output.includes(message))).toBe(true);
     });
   });
 

@@ -192,7 +192,7 @@ This project uses **Oxlint** for linting with strict rules enabled.
 bunx oxlint@latest --config .github/oxlintrc.json
 
 # Check specific file
-bunx oxlint@latest src/utils.ts
+bunx oxlint@latest --config .github/oxlintrc.json src/utils.ts
 
 # Auto-fix issues (if available)
 bunx oxlint@latest --config .github/oxlintrc.json --fix

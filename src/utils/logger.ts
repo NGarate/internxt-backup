@@ -36,15 +36,6 @@ function clearOldMessages(): void {
 }
 
 /**
- * Ensure a message ends with a newline
- * @param {string} message - The message to check
- * @returns {string} The message with a guaranteed newline at the end
- */
-function ensureNewline(message: string): string {
-  return message.endsWith('\n') ? message : message + '\n';
-}
-
-/**
  * Log a message with the specified verbosity level
  * @param {string} message - The message to log
  * @param {LogLevel} level - The verbosity level of the message
@@ -81,7 +72,7 @@ export function log(
  */
 export function error (message: string): void {
   const formattedMessage = `❌ ${message}`;
-  process.stdout.write(`${colors.red}${formattedMessage}${colors.reset}\n`);
+  process.stderr.write(`${colors.red}${formattedMessage}${colors.reset}\n`);
 }
 
 /**

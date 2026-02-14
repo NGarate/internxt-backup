@@ -571,13 +571,16 @@ export class InternxtService {
           isFolder: true,
           uuid: folder.uuid
         })),
-        ...files.map(file => ({
-          name: file.plainName,
-          path: remotePath === "/" ? `/${file.plainName}` : `${remotePath}/${file.plainName}`,
-          size: file.size,
-          isFolder: false,
-          uuid: file.uuid
-        }))
+        ...files.map(file => {
+          const fullName = file.type ? `${file.plainName}.${file.type}` : file.plainName;
+          return {
+            name: fullName,
+            path: remotePath === "/" ? `/${fullName}` : `${remotePath}/${fullName}`,
+            size: file.size,
+            isFolder: false,
+            uuid: file.uuid
+          };
+        })
       ];
 
       return {
