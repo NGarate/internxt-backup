@@ -30,7 +30,7 @@ Thank you for your interest in contributing! This document provides guidelines f
    ```bash
    bun test
    bun run typecheck
-   bunx oxlint@latest --config .github/oxlintrc.json
+   bun run lint
    ```
 
 ## Commit Message Convention
@@ -50,18 +50,18 @@ This project follows [Conventional Commits](https://www.conventionalcommits.org/
 
 ### Types
 
-| Type | Description | Version Bump |
-|------|-------------|--------------|
-| `feat` | A new feature | Minor |
-| `fix` | A bug fix | Patch |
-| `perf` | Performance improvement | Patch |
-| `docs` | Documentation changes | Patch |
-| `style` | Code style changes (formatting, semicolons, etc.) | Patch |
-| `refactor` | Code refactoring | Patch |
-| `test` | Adding or updating tests | Patch |
-| `chore` | Maintenance tasks | Patch |
-| `ci` | CI/CD changes | Patch |
-| `build` | Build system changes | Patch |
+| Type       | Description                                       | Version Bump |
+| ---------- | ------------------------------------------------- | ------------ |
+| `feat`     | A new feature                                     | Minor        |
+| `fix`      | A bug fix                                         | Patch        |
+| `perf`     | Performance improvement                           | Patch        |
+| `docs`     | Documentation changes                             | Patch        |
+| `style`    | Code style changes (formatting, semicolons, etc.) | Patch        |
+| `refactor` | Code refactoring                                  | Patch        |
+| `test`     | Adding or updating tests                          | Patch        |
+| `chore`    | Maintenance tasks                                 | Patch        |
+| `ci`       | CI/CD changes                                     | Patch        |
+| `build`    | Build system changes                              | Patch        |
 
 ### Breaking Changes
 
@@ -158,7 +158,7 @@ BREAKING CHANGE: Config file format changed from JSON to YAML."
    ```bash
    bun test
    bun run typecheck
-   bunx oxlint@latest --config .github/oxlintrc.json
+   bun run lint
    ```
 
 4. **Push and create a Pull Request**
@@ -189,13 +189,16 @@ This project uses **Oxlint** for linting with strict rules enabled.
 
 ```bash
 # Check all files
-bunx oxlint@latest --config .github/oxlintrc.json
+bun run lint
 
 # Check specific file
-bunx oxlint@latest --config .github/oxlintrc.json src/utils.ts
+bun run lint src/utils.ts
 
 # Auto-fix issues (if available)
-bunx oxlint@latest --config .github/oxlintrc.json --fix
+bun run lint:fix
+
+# Format code
+bun run format
 ```
 
 ## Testing

@@ -2,20 +2,20 @@
   "name": "internxt-backup",
   "version": "0.4.0",
   "description": "A simple, fast, and efficient tool for backing up files to Internxt Drive",
-  "type": "module",
-  "main": "index.ts",
+  "keywords": [
+    "backup",
+    "cli",
+    "cloud-storage",
+    "encryption",
+    "file-sync",
+    "file-transfer",
+    "internxt",
+    "upload"
+  ],
+  "license": "MIT",
+  "author": "ngarate",
   "bin": {
     "internxt-backup": "./dist/bin/index.js"
-  },
-  "scripts": {
-    "start": "bun index.ts",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "build": "bun build --minify --target bun --sourcemap=linked ./index.ts --outdir ./dist/bin",
-    "prepublishOnly": "bun test && bun run build"
-  },
-  "engines": {
-    "bun": ">=1.3.8"
   },
   "files": [
     "index.ts",
@@ -23,25 +23,31 @@
     "LICENSE",
     "README.md"
   ],
-  "keywords": [
-    "internxt",
-    "upload",
-    "file-transfer",
-    "cli",
-    "backup",
-    "cloud-storage",
-    "file-sync",
-    "encryption"
-  ],
-  "author": "ngarate",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "bun-types": "^1.3.8",
-    "typescript": "^5.9.3"
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "bun index.ts",
+    "test": "bun test",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format:fix": "oxfmt",
+    "format": "oxfmt --check",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build --minify --target bun --sourcemap=linked ./index.ts --outdir ./dist/bin",
+    "prepublishOnly": "bun test && bun run build"
   },
   "dependencies": {
     "chalk": "^5.6.2",
     "croner": "^10.0.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "bun-types": "^1.3.8",
+    "oxfmt": "^0.32.0",
+    "oxlint": "^1.47.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "bun": ">=1.3.8"
   }
 }
