@@ -4,9 +4,7 @@
  */
 
 import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
-import { promisify } from "node:util";
 
 // Promisified functions
 export const existsAsync = fs.promises.access;
