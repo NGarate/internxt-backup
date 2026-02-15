@@ -114,7 +114,9 @@ export function createMockFs() {
       stat: mock(async (path) => {
         if (statResultMap.has(path)) {
           const result = statResultMap.get(path);
-          if (result instanceof Error) {throw result;}
+          if (result instanceof Error) {
+            throw result;
+          }
           return result;
         }
         return {
@@ -128,7 +130,9 @@ export function createMockFs() {
       readFile: mock(async (path, _options) => {
         if (readFileResultMap.has(path)) {
           const result = readFileResultMap.get(path);
-          if (result instanceof Error) {throw result;}
+          if (result instanceof Error) {
+            throw result;
+          }
           return result;
         }
         return Buffer.from('mock file content');
@@ -137,7 +141,9 @@ export function createMockFs() {
       writeFile: mock(async (path, _data, _options) => {
         if (writeFileResultMap.has(path)) {
           const result = writeFileResultMap.get(path);
-          if (result instanceof Error) {throw result;}
+          if (result instanceof Error) {
+            throw result;
+          }
           return result;
         }
         return undefined;
@@ -156,7 +162,9 @@ export function createMockFs() {
     statSync: mock((path) => {
       if (statResultMap.has(path)) {
         const result = statResultMap.get(path);
-        if (result instanceof Error) {throw result;}
+        if (result instanceof Error) {
+          throw result;
+        }
         return result;
       }
       return {
@@ -170,7 +178,9 @@ export function createMockFs() {
     readFileSync: mock((path, _options) => {
       if (readFileResultMap.has(path)) {
         const result = readFileResultMap.get(path);
-        if (result instanceof Error) {throw result;}
+        if (result instanceof Error) {
+          throw result;
+        }
         return result;
       }
       return Buffer.from('mock file content');
@@ -179,7 +189,9 @@ export function createMockFs() {
     writeFileSync: mock((path, _data, _options) => {
       if (writeFileResultMap.has(path)) {
         const result = writeFileResultMap.get(path);
-        if (result instanceof Error) {throw result;}
+        if (result instanceof Error) {
+          throw result;
+        }
         return undefined;
       }
       return undefined;

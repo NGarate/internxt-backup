@@ -55,9 +55,7 @@ export class InternxtService {
   /**
    * List contents of a folder by UUID
    */
-  private async listFolderContents(
-    folderUuid: string,
-  ): Promise<{
+  private async listFolderContents(folderUuid: string): Promise<{
     folders: Array<{ uuid: string; plainName: string }>;
     files: Array<{
       uuid: string;
@@ -109,11 +107,15 @@ export class InternxtService {
     const { files } = await this.listFolderContents(folderUuid);
     const file = files.find((f) => {
       // Try exact match first
-      if (f.plainName === fileName) {return true;}
+      if (f.plainName === fileName) {
+        return true;
+      }
       // Reconstruct full name from plainName + type (CLI splits last extension)
       if (f.type) {
         const fullName = `${f.plainName}.${f.type}`;
-        if (fullName === fileName) {return true;}
+        if (fullName === fileName) {
+          return true;
+        }
       }
       return false;
     });
@@ -485,105 +487,105 @@ export class InternxtService {
   ): Promise<InternxtUploadResult> {
     return new Promise((resolve) => {
       (async () => {
-      try {
-        logger.verbose(
-          `Uploading with progress: ${localPath} to ${remotePath}`,
-          this.verbosity,
-        );
+        try {
+          logger.verbose(
+            `Uploading with progress: ${localPath} to ${remotePath}`,
+            this.verbosity,
+          );
 
-        // Extract parent folder and filename
-        const lastSlashIndex = remotePath.lastIndexOf('/');
-        const folderPath =
-          lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : '/';
+          // Extract parent folder and filename
+          const lastSlashIndex = remotePath.lastIndexOf('/');
+          const folderPath =
+            lastSlashIndex > 0 ? remotePath.substring(0, lastSlashIndex) : '/';
 
-        // Ensure the parent folder exists and get its UUID
-        const folderUuid = await this.ensureFolderPath(folderPath);
-        if (!folderUuid) {
-          resolve({
-            success: false,
-            filePath: localPath,
-            remotePath,
-            error: `Failed to resolve or create folder: ${folderPath}`,
-          });
-          return;
-        }
-
-        // Use spawn for streaming output with UUID-based API
-        const child = spawn(
-          'internxt',
-          [
-            'upload-file',
-            '--file',
-            localPath,
-            '--destination',
-            folderUuid,
-            '--non-interactive',
-          ],
-          {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          },
-        );
-
-        let output = '';
-        let errorOutput = '';
-
-        child.stdout.on('data', (data) => {
-          const chunk = data.toString();
-          output += chunk;
-
-          // Try to parse progress from output
-          // Internxt CLI may output progress in different formats
-          const progressMatch = chunk.match(/(\d+)%/);
-          if (progressMatch && onProgress) {
-            const percent = parseInt(progressMatch[1], 10);
-            onProgress(percent);
-          }
-        });
-
-        child.stderr.on('data', (data) => {
-          errorOutput += data.toString();
-        });
-
-        child.on('close', (code) => {
-          const fullOutput = output + errorOutput;
-
-          if (code === 0 && !fullOutput.toLowerCase().includes('error')) {
-            resolve({
-              success: true,
-              filePath: localPath,
-              remotePath,
-              output: fullOutput,
-            });
-          } else {
+          // Ensure the parent folder exists and get its UUID
+          const folderUuid = await this.ensureFolderPath(folderPath);
+          if (!folderUuid) {
             resolve({
               success: false,
               filePath: localPath,
               remotePath,
-              output: fullOutput,
-              error: fullOutput || `Process exited with code ${code}`,
+              error: `Failed to resolve or create folder: ${folderPath}`,
             });
+            return;
           }
-        });
 
-        child.on('error', (error: Error) => {
+          // Use spawn for streaming output with UUID-based API
+          const child = spawn(
+            'internxt',
+            [
+              'upload-file',
+              '--file',
+              localPath,
+              '--destination',
+              folderUuid,
+              '--non-interactive',
+            ],
+            {
+              stdio: ['ignore', 'pipe', 'pipe'],
+            },
+          );
+
+          let output = '';
+          let errorOutput = '';
+
+          child.stdout.on('data', (data) => {
+            const chunk = data.toString();
+            output += chunk;
+
+            // Try to parse progress from output
+            // Internxt CLI may output progress in different formats
+            const progressMatch = chunk.match(/(\d+)%/);
+            if (progressMatch && onProgress) {
+              const percent = parseInt(progressMatch[1], 10);
+              onProgress(percent);
+            }
+          });
+
+          child.stderr.on('data', (data) => {
+            errorOutput += data.toString();
+          });
+
+          child.on('close', (code) => {
+            const fullOutput = output + errorOutput;
+
+            if (code === 0 && !fullOutput.toLowerCase().includes('error')) {
+              resolve({
+                success: true,
+                filePath: localPath,
+                remotePath,
+                output: fullOutput,
+              });
+            } else {
+              resolve({
+                success: false,
+                filePath: localPath,
+                remotePath,
+                output: fullOutput,
+                error: fullOutput || `Process exited with code ${code}`,
+              });
+            }
+          });
+
+          child.on('error', (error: Error) => {
+            resolve({
+              success: false,
+              filePath: localPath,
+              remotePath,
+              error: error.message,
+            });
+          });
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           resolve({
             success: false,
             filePath: localPath,
             remotePath,
-            error: error.message,
+            error: errorMessage,
           });
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        resolve({
-          success: false,
-          filePath: localPath,
-          remotePath,
-          error: errorMessage,
-        });
-      }
-    })();
+        }
+      })();
     });
   }
 

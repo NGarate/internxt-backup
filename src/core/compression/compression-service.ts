@@ -91,8 +91,12 @@ export class CompressionService {
    * Returns a valid zlib compression level
    */
   private validateLevel(level: number): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 {
-    if (level < 1) {return 1;}
-    if (level > 9) {return 9;}
+    if (level < 1) {
+      return 1;
+    }
+    if (level > 9) {
+      return 9;
+    }
     return level as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   }
 
