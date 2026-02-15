@@ -12,13 +12,17 @@ function createTestFile(name: string): FileInfo {
     absolutePath: `/test/${name}`,
     size: 1024,
     checksum: `checksum-${name}`,
-    hasChanged: true
+    hasChanged: true,
   };
 }
 
 describe('processUploads', () => {
   it('should process all files', async () => {
-    const files = [createTestFile('a.txt'), createTestFile('b.txt'), createTestFile('c.txt')];
+    const files = [
+      createTestFile('a.txt'),
+      createTestFile('b.txt'),
+      createTestFile('c.txt'),
+    ];
     const processed: string[] = [];
 
     const handler = mock(async (file: FileInfo) => {
@@ -33,14 +37,21 @@ describe('processUploads', () => {
   });
 
   it('should respect maxConcurrency', async () => {
-    const files = [createTestFile('a.txt'), createTestFile('b.txt'), createTestFile('c.txt')];
+    const files = [
+      createTestFile('a.txt'),
+      createTestFile('b.txt'),
+      createTestFile('c.txt'),
+    ];
     let activeConcurrency = 0;
     let maxObservedConcurrency = 0;
 
     const handler = mock(async (file: FileInfo) => {
       activeConcurrency++;
-      maxObservedConcurrency = Math.max(maxObservedConcurrency, activeConcurrency);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      maxObservedConcurrency = Math.max(
+        maxObservedConcurrency,
+        activeConcurrency,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
       activeConcurrency--;
       return { success: true, filePath: file.relativePath };
     });
@@ -73,7 +84,11 @@ describe('processUploads', () => {
   });
 
   it('should continue processing when a handler throws', async () => {
-    const files = [createTestFile('a.txt'), createTestFile('b.txt'), createTestFile('c.txt')];
+    const files = [
+      createTestFile('a.txt'),
+      createTestFile('b.txt'),
+      createTestFile('c.txt'),
+    ];
     let callCount = 0;
 
     const handler = mock(async (file: FileInfo) => {

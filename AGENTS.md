@@ -19,15 +19,15 @@ This file contains essential information for AI coding agents working on the **i
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Bun (≥1.3.8) |
-| Language | TypeScript 5.9+ |
-| Module System | ESM (ES Modules) |
-| Testing | Bun's built-in test runner (`bun:test`) |
-| Linting | Oxlint |
-| CI/CD | GitHub Actions |
-| Release | semantic-release |
+| Component     | Technology                              |
+| ------------- | --------------------------------------- |
+| Runtime       | Bun (≥1.3.8)                            |
+| Language      | TypeScript 5.9+                         |
+| Module System | ESM (ES Modules)                        |
+| Testing       | Bun's built-in test runner (`bun:test`) |
+| Linting       | Oxlint                                  |
+| CI/CD         | GitHub Actions                          |
+| Release       | semantic-release                        |
 
 ### Dependencies
 
@@ -112,7 +112,7 @@ bun install
 # Verify setup
 bun test
 bun run typecheck
-bunx oxlint@latest --config .github/oxlintrc.json
+bun run lint
 ```
 
 ### Development
@@ -168,10 +168,10 @@ bun test --watch
 
 ```bash
 # Run Oxlint
-bunx oxlint@latest --config .github/oxlintrc.json
+bun run lint
 
 # Auto-fix (if available)
-bunx oxlint@latest --config .github/oxlintrc.json --fix
+bun run lint --fix
 ```
 
 ---
@@ -180,7 +180,7 @@ bunx oxlint@latest --config .github/oxlintrc.json --fix
 
 ### Linting Rules (Oxlint)
 
-The project uses Oxlint with strict rules defined in `.github/oxlintrc.json`:
+The project uses Oxlint with strict rules defined in `.oxlintrc.json`:
 
 - **Always use** `const` and `let`, never `var`
 - **Always use** strict equality (`===`, `!==`)
@@ -261,12 +261,12 @@ All new functionality should include tests. Current coverage includes:
 
 Uses **semantic-release** with Conventional Commits:
 
-| Commit Type | Version Bump | Example |
-|-------------|--------------|---------|
-| `feat:` | Minor | `feat: add parallel upload` |
-| `fix:` | Patch | `fix: resolve memory leak` |
-| `perf:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | Patch | `docs: update README` |
-| `feat!:` or `BREAKING CHANGE:` | Major | `feat!: redesign CLI` |
+| Commit Type                                                                 | Version Bump | Example                     |
+| --------------------------------------------------------------------------- | ------------ | --------------------------- |
+| `feat:`                                                                     | Minor        | `feat: add parallel upload` |
+| `fix:`                                                                      | Patch        | `fix: resolve memory leak`  |
+| `perf:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | Patch        | `docs: update README`       |
+| `feat!:` or `BREAKING CHANGE:`                                              | Major        | `feat!: redesign CLI`       |
 
 ### CI/CD Workflows
 
@@ -375,18 +375,18 @@ bun publish
 
 ## Important Files and Their Purposes
 
-| File | Purpose |
-|------|---------|
-| `index.ts` | CLI entry point, argument parsing, main orchestration |
-| `src/file-sync.ts` | Core sync logic, coordinates scanner and uploader |
-| `src/core/file-scanner.ts` | Discovers files, calculates checksums, tracks changes |
-| `src/core/upload/uploader.ts` | Upload orchestration, parallel processing |
-| `src/core/internxt/internxt-service.ts` | Internxt CLI wrapper and interaction |
-| `src/core/compression/compression-service.ts` | Gzip compression with smart skipping |
-| `src/core/scheduler/scheduler.ts` | Cron-based scheduled backups |
-| `src/utils/logger.ts` | Colored output with verbosity levels |
-| `bunfig.toml` | Bun configuration (telemetry off, test preload) |
-| `.releaserc.json` | semantic-release configuration |
+| File                                          | Purpose                                               |
+| --------------------------------------------- | ----------------------------------------------------- |
+| `index.ts`                                    | CLI entry point, argument parsing, main orchestration |
+| `src/file-sync.ts`                            | Core sync logic, coordinates scanner and uploader     |
+| `src/core/file-scanner.ts`                    | Discovers files, calculates checksums, tracks changes |
+| `src/core/upload/uploader.ts`                 | Upload orchestration, parallel processing             |
+| `src/core/internxt/internxt-service.ts`       | Internxt CLI wrapper and interaction                  |
+| `src/core/compression/compression-service.ts` | Gzip compression with smart skipping                  |
+| `src/core/scheduler/scheduler.ts`             | Cron-based scheduled backups                          |
+| `src/utils/logger.ts`                         | Colored output with verbosity levels                  |
+| `bunfig.toml`                                 | Bun configuration (telemetry off, test preload)       |
+| `.releaserc.json`                             | semantic-release configuration                        |
 
 ---
 
@@ -498,11 +498,13 @@ tsc --noEmit src/specific-file.ts
 **Symptom**: GitHub release exists but has no binary assets.
 
 **Causes & Solutions**:
+
 1. **workflow_run not triggered**: Check if the `semantic-release.yml` workflow completed successfully.
 2. **Time gate exceeded**: If release creation takes >10 minutes, the build may be skipped. Re-run manually.
 3. **API rate limiting**: The `gh api` call may fail. Check workflow logs for retry attempts.
 
 **Manual Fix**:
+
 ```bash
 # Re-trigger release workflow manually from GitHub Actions UI
 # Or push a new tag with PAT (Personal Access Token)
@@ -515,6 +517,7 @@ git push origin v0.x.x
 **Symptom**: One or more platform builds fail in the matrix.
 
 **Solutions**:
+
 1. Check platform-specific issues in logs
 2. Verify `bun` supports the target platform
 3. Re-run failed jobs from GitHub Actions UI
@@ -524,11 +527,13 @@ git push origin v0.x.x
 **Symptom**: Pushing to `main` doesn't create a release.
 
 **Causes**:
+
 1. Commit messages don't follow Conventional Commits format
 2. No version bump required (only `chore`, `docs`, `style` commits)
 3. `GITHUB_TOKEN` lacks permissions
 
 **Verify**:
+
 ```bash
 # Check semantic-release dry-run
 bunx semantic-release@latest --dry-run
@@ -539,6 +544,7 @@ bunx semantic-release@latest --dry-run
 **Symptom**: `Error: Resource not accessible by integration`
 
 **Solution**: Ensure workflow has required permissions:
+
 ```yaml
 permissions:
   contents: write
@@ -548,4 +554,4 @@ permissions:
 
 ---
 
-*This file was generated for AI agents working on the internxt-backup project. For human contributors, see `README.md` and `.github/CONTRIBUTING.md`.*
+_This file was generated for AI agents working on the internxt-backup project. For human contributors, see `README.md` and `.github/CONTRIBUTING.md`._

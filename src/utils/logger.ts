@@ -9,15 +9,20 @@ const colors = {
   yellow: '\x1b[33m',
   red: '\x1b[31m',
   bold: '\x1b[1m',
-  reset: '\x1b[0m'
+  reset: '\x1b[0m',
 };
 
 // Color helper functions for use across the codebase
-export const red = (text: string): string => `${colors.red}${text}${colors.reset}`;
-export const green = (text: string): string => `${colors.green}${text}${colors.reset}`;
-export const yellow = (text: string): string => `${colors.yellow}${text}${colors.reset}`;
-export const blue = (text: string): string => `${colors.blue}${text}${colors.reset}`;
-export const bold = (text: string): string => `${colors.bold}${text}${colors.reset}`;
+export const red = (text: string): string =>
+  `${colors.red}${text}${colors.reset}`;
+export const green = (text: string): string =>
+  `${colors.green}${text}${colors.reset}`;
+export const yellow = (text: string): string =>
+  `${colors.yellow}${text}${colors.reset}`;
+export const blue = (text: string): string =>
+  `${colors.blue}${text}${colors.reset}`;
+export const bold = (text: string): string =>
+  `${colors.bold}${text}${colors.reset}`;
 
 // Duplicate message tracking
 const recentMessages = new Set<string>();
@@ -37,7 +42,7 @@ export function log(
   message: string,
   level: Verbosity,
   currentVerbosity: number,
-  allowDuplicates: boolean = true
+  allowDuplicates: boolean = true,
 ): void {
   if (currentVerbosity >= level) {
     if (!allowDuplicates && recentMessages.has(message)) {

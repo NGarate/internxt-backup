@@ -16,7 +16,10 @@ import type { FileScannerInterface } from '../../src/interfaces/file-scanner';
 /**
  * Skip tests that use accessor property spying (a common Bun limitation)
  */
-export function skipIfSpyingIssues(name: string, fn: () => Promise<void> | void): void {
+export function skipIfSpyingIssues(
+  name: string,
+  fn: () => Promise<void> | void,
+): void {
   return it(name, async () => {
     try {
       await fn();
@@ -57,39 +60,49 @@ export function spyOn(object: any, method: string): any {
  */
 export function createMockInternxtService(): InternxtService {
   return {
-    checkCLI: mock(() => Promise.resolve({
-      installed: true,
-      authenticated: true,
-      version: "1.0.0",
-      error: undefined
-    })),
-    uploadFile: mock(() => Promise.resolve({
-      success: true,
-      filePath: '/local/path',
-      remotePath: '/remote/path',
-      output: 'Upload successful',
-      error: undefined
-    })),
-    uploadFileWithProgress: mock(() => Promise.resolve({
-      success: true,
-      filePath: '/local/path',
-      remotePath: '/remote/path',
-      output: 'Upload successful',
-      error: undefined
-    })),
-    createFolder: mock(() => Promise.resolve({
-      success: true,
-      path: '/remote/path',
-      output: 'Folder created',
-      error: undefined
-    })),
-    listFiles: mock(() => Promise.resolve({
-      success: true,
-      files: [],
-      error: undefined
-    })),
+    checkCLI: mock(() =>
+      Promise.resolve({
+        installed: true,
+        authenticated: true,
+        version: '1.0.0',
+        error: undefined,
+      }),
+    ),
+    uploadFile: mock(() =>
+      Promise.resolve({
+        success: true,
+        filePath: '/local/path',
+        remotePath: '/remote/path',
+        output: 'Upload successful',
+        error: undefined,
+      }),
+    ),
+    uploadFileWithProgress: mock(() =>
+      Promise.resolve({
+        success: true,
+        filePath: '/local/path',
+        remotePath: '/remote/path',
+        output: 'Upload successful',
+        error: undefined,
+      }),
+    ),
+    createFolder: mock(() =>
+      Promise.resolve({
+        success: true,
+        path: '/remote/path',
+        output: 'Folder created',
+        error: undefined,
+      }),
+    ),
+    listFiles: mock(() =>
+      Promise.resolve({
+        success: true,
+        files: [],
+        error: undefined,
+      }),
+    ),
     fileExists: mock(() => Promise.resolve(false)),
-    deleteFile: mock(() => Promise.resolve(true))
+    deleteFile: mock(() => Promise.resolve(true)),
   };
 }
 
@@ -99,20 +112,22 @@ export function createMockInternxtService(): InternxtService {
 export function createMockCompressionService(): CompressionService {
   return {
     shouldCompress: mock(() => true),
-    compressFile: mock(() => Promise.resolve({
-      success: true,
-      originalPath: '/original/path',
-      compressedPath: '/compressed/path.gz',
-      originalSize: 1024,
-      compressedSize: 512,
-      ratio: 50,
-      error: undefined
-    })),
+    compressFile: mock(() =>
+      Promise.resolve({
+        success: true,
+        originalPath: '/original/path',
+        compressedPath: '/compressed/path.gz',
+        originalSize: 1024,
+        compressedSize: 512,
+        ratio: 50,
+        error: undefined,
+      }),
+    ),
     compressForUpload: mock(() => Promise.resolve('/compressed/path.gz')),
     cleanup: mock(() => Promise.resolve()),
     cleanupAll: mock(() => Promise.resolve()),
     getCompressedRemotePath: mock((remotePath: string) => `${remotePath}.gz`),
-    isCompressedPath: mock((remotePath: string) => remotePath.endsWith('.gz'))
+    isCompressedPath: mock((remotePath: string) => remotePath.endsWith('.gz')),
   };
 }
 
@@ -121,17 +136,21 @@ export function createMockCompressionService(): CompressionService {
  */
 export function createMockResumableUploader(): ResumableUploader {
   return {
-    shouldUseResumable: mock((fileSize: number) => fileSize > 100 * 1024 * 1024),
-    uploadLargeFile: mock(() => Promise.resolve({
-      success: true,
-      filePath: '/local/path',
-      remotePath: '/remote/path',
-      bytesUploaded: 1024,
-      error: undefined
-    })),
+    shouldUseResumable: mock(
+      (fileSize: number) => fileSize > 100 * 1024 * 1024,
+    ),
+    uploadLargeFile: mock(() =>
+      Promise.resolve({
+        success: true,
+        filePath: '/local/path',
+        remotePath: '/remote/path',
+        bytesUploaded: 1024,
+        error: undefined,
+      }),
+    ),
     getUploadProgress: mock(() => Promise.resolve(50)),
     canResume: mock(() => Promise.resolve(false)),
-    clearState: mock(() => Promise.resolve())
+    clearState: mock(() => Promise.resolve()),
   };
 }
 
@@ -144,10 +163,16 @@ export function createMockHashCache(): HashCache {
     load: mock(() => Promise.resolve(true)),
     save: mock(() => Promise.resolve(true)),
     hasChanged: mock(() => Promise.resolve(true)),
-    calculateHash: mock((filePath: string) => Promise.resolve(`mock-hash-for-${filePath}`)),
-    updateHash: mock((filePath: string, hash: string) => { cache.set(filePath, hash); }),
-    get size() { return cache.size; },
-    cache
+    calculateHash: mock((filePath: string) =>
+      Promise.resolve(`mock-hash-for-${filePath}`),
+    ),
+    updateHash: mock((filePath: string, hash: string) => {
+      cache.set(filePath, hash);
+    }),
+    get size() {
+      return cache.size;
+    },
+    cache,
   };
 }
 
@@ -163,7 +188,7 @@ export function createMockProgressTracker(): ProgressTracker {
     stopProgressUpdates: mock(() => {}),
     displaySummary: mock(() => {}),
     getProgressPercentage: mock(() => 0),
-    isComplete: mock(() => false)
+    isComplete: mock(() => false),
   };
 }
 
@@ -174,7 +199,7 @@ export function createMockFileScanner(): FileScannerInterface {
   return {
     updateFileState: mock(() => {}),
     recordCompletion: mock(() => {}),
-    saveState: mock(() => Promise.resolve())
+    saveState: mock(() => Promise.resolve()),
   };
 }
 
@@ -184,16 +209,18 @@ export function createMockFileScanner(): FileScannerInterface {
 export function createMockFileInfo(
   filePath: string,
   sourceDir: string = './source',
-  needsUpload: boolean = true
+  needsUpload: boolean = true,
 ) {
-  const relativePath = filePath.replace(`${sourceDir}/`, '').replace(/\\/g, '/');
+  const relativePath = filePath
+    .replace(`${sourceDir}/`, '')
+    .replace(/\\/g, '/');
   return {
     filePath,
     absolutePath: filePath,
     relativePath,
     size: 1024,
     checksum: 'mocked-checksum-' + relativePath,
-    hasChanged: needsUpload as boolean | null
+    hasChanged: needsUpload as boolean | null,
   };
 }
 
@@ -221,13 +248,13 @@ export function mockProcessOutput() {
     Object.defineProperty(process.stdout, 'write', {
       configurable: true,
       writable: true,
-      value: mockStdout
+      value: mockStdout,
     });
 
     Object.defineProperty(process.stderr, 'write', {
       configurable: true,
       writable: true,
-      value: mockStderr
+      value: mockStderr,
     });
   } catch (e) {
     console.warn('Could not mock process.stdout/stderr:', e);
@@ -245,6 +272,6 @@ export function mockProcessOutput() {
       } catch (e) {
         console.warn('Could not restore process.stdout/stderr:', e);
       }
-    }
+    },
   };
 }

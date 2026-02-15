@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { readFile, writeFile, unlink } from "node:fs/promises";
-import { join, basename } from "node:path";
-import { tmpdir } from "node:os";
-import { createHash } from "node:crypto";
-import * as logger from "../../utils/logger";
-import { InternxtService } from "../internxt/internxt-service";
-import { ChunkedUploadState } from "../../interfaces/internxt";
+import { existsSync, mkdirSync } from 'node:fs';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { join, basename } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import * as logger from '../../utils/logger';
+import { InternxtService } from '../internxt/internxt-service';
+import { ChunkedUploadState } from '../../interfaces/internxt';
 
 export interface ResumableUploadOptions {
   chunkSize?: number;
@@ -23,11 +23,14 @@ export interface ResumableUploadResult {
 }
 
 const DEFAULT_CHUNK_SIZE = 50 * 1024 * 1024;
-const STATE_FILE_EXTENSION = ".upload-state.json";
+const STATE_FILE_EXTENSION = '.upload-state.json';
 
-export function createResumableUploader(internxtService: InternxtService, options: ResumableUploadOptions = {}) {
+export function createResumableUploader(
+  internxtService: InternxtService,
+  options: ResumableUploadOptions = {},
+) {
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
-  const resumeDir = options.resumeDir ?? join(tmpdir(), "internxt-uploads");
+  const resumeDir = options.resumeDir ?? join(tmpdir(), 'internxt-uploads');
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
   const retryDelayMs = options.retryDelayMs;
 
@@ -38,37 +41,48 @@ export function createResumableUploader(internxtService: InternxtService, option
   const calculateChecksum = async (filePath: string): Promise<string> => {
     const file = Bun.file(filePath);
     const content = await file.arrayBuffer();
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(new Uint8Array(content));
-    return hash.digest("hex");
+    return hash.digest('hex');
   };
 
   const getStateFilePath = (filePath: string): string => {
     const fileName = basename(filePath);
-    const hash = createHash("md5").update(filePath).digest("hex");
+    const hash = createHash('md5').update(filePath).digest('hex');
     return join(resumeDir, `${fileName}.${hash}${STATE_FILE_EXTENSION}`);
   };
 
-  const loadState = async (filePath: string): Promise<ChunkedUploadState | null> => {
+  const loadState = async (
+    filePath: string,
+  ): Promise<ChunkedUploadState | null> => {
     const statePath = getStateFilePath(filePath);
 
     try {
-      if (!existsSync(statePath)) { return null; }
+      if (!existsSync(statePath)) {
+        return null;
+      }
 
-      const stateContent = await readFile(statePath, "utf-8");
+      const stateContent = await readFile(statePath, 'utf-8');
       const state: ChunkedUploadState = JSON.parse(stateContent);
 
       const currentChecksum = await calculateChecksum(filePath);
       if (state.checksum !== currentChecksum) {
-        logger.verbose(`File changed since last upload, starting fresh`, verbosity);
+        logger.verbose(
+          `File changed since last upload, starting fresh`,
+          verbosity,
+        );
         await clearState(filePath);
         return null;
       }
 
-      logger.verbose(`Found existing upload state: ${state.uploadedChunks.length}/${state.totalChunks} chunks`, verbosity);
+      logger.verbose(
+        `Found existing upload state: ${state.uploadedChunks.length}/${state.totalChunks} chunks`,
+        verbosity,
+      );
       return state;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.verbose(`Failed to load state: ${errorMessage}`, verbosity);
       return null;
     }
@@ -79,7 +93,8 @@ export function createResumableUploader(internxtService: InternxtService, option
     try {
       await writeFile(statePath, JSON.stringify(state, null, 2));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.verbose(`Failed to save state: ${errorMessage}`, verbosity);
     }
   };
@@ -91,7 +106,8 @@ export function createResumableUploader(internxtService: InternxtService, option
         await unlink(statePath);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.verbose(`Failed to clear state: ${errorMessage}`, verbosity);
     }
   };
@@ -103,21 +119,28 @@ export function createResumableUploader(internxtService: InternxtService, option
   const uploadLargeFile = async (
     filePath: string,
     remotePath: string,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
   ): Promise<ResumableUploadResult> => {
     try {
       const file = Bun.file(filePath);
       const fileSize = file.size;
 
       if (!shouldUseResumable(fileSize)) {
-        logger.verbose(`File size ${fileSize} is below threshold, using regular upload`, verbosity);
-        const result = await internxtService.uploadFileWithProgress(filePath, remotePath, onProgress);
+        logger.verbose(
+          `File size ${fileSize} is below threshold, using regular upload`,
+          verbosity,
+        );
+        const result = await internxtService.uploadFileWithProgress(
+          filePath,
+          remotePath,
+          onProgress,
+        );
         return {
           success: result.success,
           filePath,
           remotePath,
           bytesUploaded: result.success ? fileSize : 0,
-          error: result.error
+          error: result.error,
         };
       }
 
@@ -133,13 +156,13 @@ export function createResumableUploader(internxtService: InternxtService, option
           totalChunks,
           uploadedChunks: [],
           checksum,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
       }
 
       logger.info(
         `Starting resumable upload: ${basename(filePath)} (${state.uploadedChunks.length}/${state.totalChunks} chunks already uploaded)`,
-        verbosity
+        verbosity,
       );
 
       let retryCount = 0;
@@ -151,25 +174,38 @@ export function createResumableUploader(internxtService: InternxtService, option
             filePath,
             remotePath,
             (percent) => {
-              const baseProgress = (state!.uploadedChunks.length / state!.totalChunks) * 100;
+              const baseProgress =
+                (state!.uploadedChunks.length / state!.totalChunks) * 100;
               const currentChunkProgress = percent / state!.totalChunks;
-              const totalProgress = Math.min(100, baseProgress + currentChunkProgress);
+              const totalProgress = Math.min(
+                100,
+                baseProgress + currentChunkProgress,
+              );
               if (onProgress) {
                 onProgress(Math.round(totalProgress));
               }
-            }
+            },
           );
 
           if (result.success) {
             await clearState(filePath);
-            return { success: true, filePath, remotePath, bytesUploaded: fileSize };
+            return {
+              success: true,
+              filePath,
+              remotePath,
+              bytesUploaded: fileSize,
+            };
           } else {
-            throw new Error(result.error || "Upload failed");
+            throw new Error(result.error || 'Upload failed');
           }
         } catch (error) {
           retryCount++;
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          logger.verbose(`Upload attempt ${retryCount} failed: ${errorMessage}`, verbosity);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          logger.verbose(
+            `Upload attempt ${retryCount} failed: ${errorMessage}`,
+            verbosity,
+          );
 
           if (retryCount >= maxRetries) {
             await saveState(state);
@@ -177,27 +213,44 @@ export function createResumableUploader(internxtService: InternxtService, option
               success: false,
               filePath,
               remotePath,
-              bytesUploaded: (state.uploadedChunks.length / state.totalChunks) * fileSize,
-              error: `Upload failed after ${maxRetries} attempts: ${errorMessage}`
+              bytesUploaded:
+                (state.uploadedChunks.length / state.totalChunks) * fileSize,
+              error: `Upload failed after ${maxRetries} attempts: ${errorMessage}`,
             };
           }
 
-          const delay = retryDelayMs ?? Math.min(1000 * Math.pow(2, retryCount), 10000);
+          const delay =
+            retryDelayMs ?? Math.min(1000 * Math.pow(2, retryCount), 10000);
           logger.verbose(`Retrying in ${delay}ms...`, verbosity);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
-      return { success: false, filePath, remotePath, bytesUploaded: 0, error: "Upload failed after all retries" };
+      return {
+        success: false,
+        filePath,
+        remotePath,
+        bytesUploaded: 0,
+        error: 'Upload failed after all retries',
+      };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return { success: false, filePath, remotePath, bytesUploaded: 0, error: errorMessage };
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        filePath,
+        remotePath,
+        bytesUploaded: 0,
+        error: errorMessage,
+      };
     }
   };
 
   const getUploadProgress = async (filePath: string): Promise<number> => {
     const state = await loadState(filePath);
-    if (!state) { return 0; }
+    if (!state) {
+      return 0;
+    }
     return Math.round((state.uploadedChunks.length / state.totalChunks) * 100);
   };
 
@@ -206,7 +259,13 @@ export function createResumableUploader(internxtService: InternxtService, option
     return state !== null && state.uploadedChunks.length < state.totalChunks;
   };
 
-  return { shouldUseResumable, uploadLargeFile, getUploadProgress, canResume, clearState };
+  return {
+    shouldUseResumable,
+    uploadLargeFile,
+    getUploadProgress,
+    canResume,
+    clearState,
+  };
 }
 
 export type ResumableUploader = ReturnType<typeof createResumableUploader>;

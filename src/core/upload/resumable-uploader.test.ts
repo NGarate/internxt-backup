@@ -2,7 +2,15 @@
  * Tests for createResumableUploader factory function
  */
 
-import { expect, describe, beforeEach, afterEach, it, mock, jest } from 'bun:test';
+import {
+  expect,
+  describe,
+  beforeEach,
+  afterEach,
+  it,
+  mock,
+  jest,
+} from 'bun:test';
 import { createResumableUploader } from './resumable-uploader';
 import { Verbosity } from '../../interfaces/logger';
 import { writeFile, mkdir, rmdir } from 'node:fs/promises';
@@ -28,7 +36,7 @@ describe('createResumableUploader', () => {
 
     uploader = createResumableUploader(mockInternxtService, {
       verbosity: Verbosity.Normal,
-      resumeDir
+      resumeDir,
     });
 
     (mockInternxtService.uploadFileWithProgress as any).mockClear?.();
@@ -60,7 +68,7 @@ describe('createResumableUploader', () => {
       const customUploader = createResumableUploader(mockInternxtService, {
         chunkSize: 1024 * 1024,
         verbosity: Verbosity.Verbose,
-        resumeDir: join(tempDir, 'custom-resume')
+        resumeDir: join(tempDir, 'custom-resume'),
       });
       expect(customUploader).toBeDefined();
     });
@@ -85,14 +93,19 @@ describe('createResumableUploader', () => {
       const testFile = join(tempDir, 'small.txt');
       await writeFile(testFile, 'small content');
 
-      mockInternxtService.uploadFileWithProgress = mock(() => Promise.resolve({
-        success: true,
-        filePath: testFile,
-        remotePath: '/remote/small.txt',
-        output: 'Upload successful'
-      }));
+      mockInternxtService.uploadFileWithProgress = mock(() =>
+        Promise.resolve({
+          success: true,
+          filePath: testFile,
+          remotePath: '/remote/small.txt',
+          output: 'Upload successful',
+        }),
+      );
 
-      const result = await uploader.uploadLargeFile(testFile, '/remote/small.txt');
+      const result = await uploader.uploadLargeFile(
+        testFile,
+        '/remote/small.txt',
+      );
 
       expect(result.success).toBe(true);
       expect(mockInternxtService.uploadFileWithProgress).toHaveBeenCalled();
@@ -103,14 +116,19 @@ describe('createResumableUploader', () => {
       const content = Buffer.alloc(101 * 1024 * 1024, 0);
       await writeFile(testFile, content);
 
-      mockInternxtService.uploadFileWithProgress = mock(() => Promise.resolve({
-        success: true,
-        filePath: testFile,
-        remotePath: '/remote/large.bin',
-        output: 'Upload successful'
-      }));
+      mockInternxtService.uploadFileWithProgress = mock(() =>
+        Promise.resolve({
+          success: true,
+          filePath: testFile,
+          remotePath: '/remote/large.bin',
+          output: 'Upload successful',
+        }),
+      );
 
-      const result = await uploader.uploadLargeFile(testFile, '/remote/large.bin');
+      const result = await uploader.uploadLargeFile(
+        testFile,
+        '/remote/large.bin',
+      );
 
       expect(result.success).toBe(true);
       expect(result.bytesUploaded).toBe(101 * 1024 * 1024);
@@ -126,21 +144,26 @@ describe('createResumableUploader', () => {
       const testUploader = createResumableUploader(mockInternxtService, {
         verbosity: Verbosity.Normal,
         resumeDir,
-        retryDelayMs: 0
+        retryDelayMs: 0,
       });
 
       // Override shouldUseResumable for this test
       (testUploader as any).shouldUseResumable = () => true;
 
-      mockInternxtService.uploadFileWithProgress = mock(() => Promise.resolve({
-        success: false,
-        filePath: testFile,
-        remotePath: '/remote/fail.bin',
-        output: 'Upload failed',
-        error: 'Upload failed'
-      }));
+      mockInternxtService.uploadFileWithProgress = mock(() =>
+        Promise.resolve({
+          success: false,
+          filePath: testFile,
+          remotePath: '/remote/fail.bin',
+          output: 'Upload failed',
+          error: 'Upload failed',
+        }),
+      );
 
-      const result = await testUploader.uploadLargeFile(testFile, '/remote/fail.bin');
+      const result = await testUploader.uploadLargeFile(
+        testFile,
+        '/remote/fail.bin',
+      );
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
@@ -153,19 +176,29 @@ describe('createResumableUploader', () => {
 
       const progressCallback = mock(() => {});
 
-      mockInternxtService.uploadFileWithProgress = mock((path: string, remote: string, onProgress?: (percent: number) => void) => {
-        if (onProgress) {
-          onProgress(50);
-        }
-        return Promise.resolve({
-          success: true,
-          filePath: testFile,
-          remotePath: '/remote/progress.bin',
-          output: 'Upload successful'
-        });
-      });
+      mockInternxtService.uploadFileWithProgress = mock(
+        (
+          path: string,
+          remote: string,
+          onProgress?: (percent: number) => void,
+        ) => {
+          if (onProgress) {
+            onProgress(50);
+          }
+          return Promise.resolve({
+            success: true,
+            filePath: testFile,
+            remotePath: '/remote/progress.bin',
+            output: 'Upload successful',
+          });
+        },
+      );
 
-      await uploader.uploadLargeFile(testFile, '/remote/progress.bin', progressCallback);
+      await uploader.uploadLargeFile(
+        testFile,
+        '/remote/progress.bin',
+        progressCallback,
+      );
 
       expect(progressCallback).toHaveBeenCalled();
     });
@@ -173,7 +206,9 @@ describe('createResumableUploader', () => {
 
   describe('getUploadProgress', () => {
     it('should return 0 when no state exists', async () => {
-      const progress = await uploader.getUploadProgress('/nonexistent/file.bin');
+      const progress = await uploader.getUploadProgress(
+        '/nonexistent/file.bin',
+      );
       expect(progress).toBe(0);
     });
   });

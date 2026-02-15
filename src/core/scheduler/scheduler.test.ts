@@ -59,8 +59,8 @@ describe('createScheduler', () => {
         syncOptions: {
           target: '/backup',
           compress: true,
-          cores: 4
-        }
+          cores: 4,
+        },
       };
 
       expect(config.sourceDir).toBe('/test');

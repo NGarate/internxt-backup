@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -23,7 +23,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-                    bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -37,7 +37,10 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run Oxlint
-        run: bunx oxlint@latest --config .github/oxlintrc.json
+        run: bun run lint
+
+      - name: Check formatting
+        run: bun run format
 
   typecheck:
     name: Type Check
@@ -50,7 +53,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-                    bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -78,7 +81,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-                    bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -105,7 +108,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-                    bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -159,7 +162,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.1.2
         with:
-                    bun-version: "1.3.8"
+          bun-version: '1.3.8'
 
       - name: Cache dependencies
         uses: actions/cache@v5.0.3
@@ -179,13 +182,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           # Skip execution test for cross-compiled ARM64 binaries
           if [[ "${{ matrix.target }}" == *"arm64"* ]] && [[ "$(uname -m)" != "arm64" ]] && [[ "$(uname -m)" != "aarch64" ]]; then
             echo "Skipping execution test for cross-compiled ARM64 binary"
             exit 0
           fi
-          
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Test Windows executable - these should succeed
             ./dist/${{ matrix.artifact }} --version

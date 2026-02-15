@@ -1,12 +1,12 @@
-import { FileInfo, FileScannerInterface } from "../../interfaces/file-scanner";
-import * as logger from "../../utils/logger";
-import { InternxtService } from "../internxt/internxt-service";
-import { CompressionService } from "../compression/compression-service";
-import { ResumableUploader } from "./resumable-uploader";
-import { HashCache } from "./hash-cache";
-import { ProgressTracker } from "./progress-tracker";
-import { processUploads } from "./upload-pool";
-import { normalizePathInfo } from "./path-utils";
+import { FileInfo, FileScannerInterface } from '../../interfaces/file-scanner';
+import * as logger from '../../utils/logger';
+import { InternxtService } from '../internxt/internxt-service';
+import { CompressionService } from '../compression/compression-service';
+import { ResumableUploader } from './resumable-uploader';
+import { HashCache } from './hash-cache';
+import { ProgressTracker } from './progress-tracker';
+import { processUploads } from './upload-pool';
+import { normalizePathInfo } from './path-utils';
 
 export interface UploaderOptions {
   compress?: boolean;
@@ -27,10 +27,16 @@ export function createUploader(
   maxConcurrency: number,
   targetDir: string,
   verbosity: number,
-  deps: UploaderDeps
+  deps: UploaderDeps,
 ) {
-  const normalizedTargetDir = targetDir.trim().replace(/\/+$/g, "");
-  const { internxtService, hashCache, progressTracker, compressionService, resumableUploader } = deps;
+  const normalizedTargetDir = targetDir.trim().replace(/\/+$/g, '');
+  const {
+    internxtService,
+    hashCache,
+    progressTracker,
+    compressionService,
+    resumableUploader,
+  } = deps;
 
   let fileScanner: FileScannerInterface | null = null;
   const uploadedFiles = new Set<string>();
@@ -38,14 +44,19 @@ export function createUploader(
 
   const setFileScanner = (scanner: FileScannerInterface): void => {
     fileScanner = scanner;
-    logger.verbose("File scanner set", verbosity);
+    logger.verbose('File scanner set', verbosity);
   };
 
   const ensureDirectoryExists = async (directory: string): Promise<boolean> => {
-    if (!directory) { return true; }
+    if (!directory) {
+      return true;
+    }
 
     if (createdDirectories.has(directory)) {
-      logger.verbose(`Directory already created in this session: ${directory}`, verbosity);
+      logger.verbose(
+        `Directory already created in this session: ${directory}`,
+        verbosity,
+      );
       return true;
     }
 
@@ -56,17 +67,25 @@ export function createUploader(
     return result.success;
   };
 
-  const handleFileUpload = async (fileInfo: FileInfo): Promise<{ success: boolean; filePath: string }> => {
+  const handleFileUpload = async (
+    fileInfo: FileInfo,
+  ): Promise<{ success: boolean; filePath: string }> => {
     let compressedPath: string | null = null;
 
     try {
       if (uploadedFiles.has(fileInfo.relativePath)) {
-        logger.verbose(`File ${fileInfo.relativePath} already uploaded in this session, skipping`, verbosity);
+        logger.verbose(
+          `File ${fileInfo.relativePath} already uploaded in this session, skipping`,
+          verbosity,
+        );
         return { success: true, filePath: fileInfo.relativePath };
       }
 
       if (fileInfo.hasChanged === false) {
-        logger.verbose(`File ${fileInfo.relativePath} has not changed, skipping upload`, verbosity);
+        logger.verbose(
+          `File ${fileInfo.relativePath} has not changed, skipping upload`,
+          verbosity,
+        );
         progressTracker.recordSuccess();
         return { success: true, filePath: fileInfo.relativePath };
       }
@@ -74,56 +93,80 @@ export function createUploader(
       if (fileInfo.hasChanged === null) {
         const hasChanged = await hashCache.hasChanged(fileInfo.absolutePath);
         if (!hasChanged) {
-          logger.verbose(`File ${fileInfo.relativePath} has not changed, skipping upload`, verbosity);
+          logger.verbose(
+            `File ${fileInfo.relativePath} has not changed, skipping upload`,
+            verbosity,
+          );
           progressTracker.recordSuccess();
           return { success: true, filePath: fileInfo.relativePath };
         }
       }
 
-      logger.verbose(`File ${fileInfo.relativePath} has changed, uploading...`, verbosity);
+      logger.verbose(
+        `File ${fileInfo.relativePath} has changed, uploading...`,
+        verbosity,
+      );
 
       if (normalizedTargetDir) {
         await ensureDirectoryExists(normalizedTargetDir);
       }
 
-      const pathInfo = normalizePathInfo(fileInfo.relativePath, normalizedTargetDir);
+      const pathInfo = normalizePathInfo(
+        fileInfo.relativePath,
+        normalizedTargetDir,
+      );
 
       if (pathInfo.directory) {
-        logger.verbose(`Ensuring directory structure exists for file: ${pathInfo.directory}`, verbosity);
+        logger.verbose(
+          `Ensuring directory structure exists for file: ${pathInfo.directory}`,
+          verbosity,
+        );
         await ensureDirectoryExists(pathInfo.fullDirectoryPath);
       }
 
       let uploadPath = fileInfo.absolutePath;
       let finalRemotePath = pathInfo.targetPath;
 
-      if (compressionService && compressionService.shouldCompress(fileInfo.absolutePath, fileInfo.size)) {
-        const compressionResult = await compressionService.compressFile(fileInfo.absolutePath);
+      if (
+        compressionService &&
+        compressionService.shouldCompress(fileInfo.absolutePath, fileInfo.size)
+      ) {
+        const compressionResult = await compressionService.compressFile(
+          fileInfo.absolutePath,
+        );
 
         if (compressionResult.success && compressionResult.ratio > 0) {
           uploadPath = compressionResult.compressedPath;
-          finalRemotePath = compressionService.getCompressedRemotePath(pathInfo.targetPath);
+          finalRemotePath = compressionService.getCompressedRemotePath(
+            pathInfo.targetPath,
+          );
           compressedPath = uploadPath;
 
           logger.verbose(
             `Compressed ${fileInfo.relativePath}: ${compressionResult.ratio.toFixed(1)}% reduction`,
-            verbosity
+            verbosity,
           );
         }
       }
 
       let result;
 
-      if (resumableUploader && resumableUploader.shouldUseResumable(fileInfo.size)) {
+      if (
+        resumableUploader &&
+        resumableUploader.shouldUseResumable(fileInfo.size)
+      ) {
         const resumeResult = await resumableUploader.uploadLargeFile(
           uploadPath,
           finalRemotePath,
-          (percent) => { logger.verbose(`Upload progress: ${percent}%`, verbosity); }
+          (percent) => {
+            logger.verbose(`Upload progress: ${percent}%`, verbosity);
+          },
         );
         result = {
           success: resumeResult.success,
           filePath: uploadPath,
           remotePath: finalRemotePath,
-          output: resumeResult.error
+          output: resumeResult.error,
         };
       } else {
         result = await internxtService.uploadFile(uploadPath, finalRemotePath);
@@ -135,7 +178,10 @@ export function createUploader(
 
       if (result.success) {
         uploadedFiles.add(fileInfo.relativePath);
-        logger.success(`Successfully uploaded ${fileInfo.relativePath}`, verbosity);
+        logger.success(
+          `Successfully uploaded ${fileInfo.relativePath}`,
+          verbosity,
+        );
 
         if (fileScanner) {
           fileScanner.updateFileState(fileInfo.relativePath, fileInfo.checksum);
@@ -147,7 +193,9 @@ export function createUploader(
         progressTracker.recordSuccess();
         return { success: true, filePath: fileInfo.relativePath };
       } else {
-        logger.error(`Failed to upload ${fileInfo.relativePath}: ${result.error || result.output || "Unknown error"}`);
+        logger.error(
+          `Failed to upload ${fileInfo.relativePath}: ${result.error || result.output || 'Unknown error'}`,
+        );
         progressTracker.recordFailure();
         return { success: false, filePath: fileInfo.relativePath };
       }
@@ -156,8 +204,11 @@ export function createUploader(
         await compressionService.cleanup(compressedPath);
       }
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Error uploading file ${fileInfo.relativePath}: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error(
+        `Error uploading file ${fileInfo.relativePath}: ${errorMessage}`,
+      );
       progressTracker.recordFailure();
       return { success: false, filePath: fileInfo.relativePath };
     }
@@ -168,7 +219,7 @@ export function createUploader(
 
     const cliStatus = await internxtService.checkCLI();
     if (!cliStatus.installed || !cliStatus.authenticated) {
-      logger.error("Internxt CLI not ready. Upload cannot proceed.");
+      logger.error('Internxt CLI not ready. Upload cannot proceed.');
       if (cliStatus.error) {
         logger.error(cliStatus.error);
       }
@@ -177,11 +228,14 @@ export function createUploader(
 
     if (normalizedTargetDir) {
       const dirResult = await ensureDirectoryExists(normalizedTargetDir);
-      logger.verbose(`Target directory result: ${dirResult ? "success" : "failed"}`, verbosity);
+      logger.verbose(
+        `Target directory result: ${dirResult ? 'success' : 'failed'}`,
+        verbosity,
+      );
     }
 
     if (filesToUpload.length === 0) {
-      logger.success("All files are up to date.", verbosity);
+      logger.success('All files are up to date.', verbosity);
       return;
     }
 
@@ -190,21 +244,29 @@ export function createUploader(
 
     // Pre-create unique directories
     if (filesToUpload.length > 1) {
-      const uniqueDirs = [...new Set(
-        filesToUpload
-          .map(f => normalizePathInfo(f.relativePath, normalizedTargetDir))
-          .filter(p => p.directory !== "")
-          .map(p => p.fullDirectoryPath)
-      )];
+      const uniqueDirs = [
+        ...new Set(
+          filesToUpload
+            .map((f) => normalizePathInfo(f.relativePath, normalizedTargetDir))
+            .filter((p) => p.directory !== '')
+            .map((p) => p.fullDirectoryPath),
+        ),
+      ];
 
-      logger.verbose(`Pre-creating ${uniqueDirs.length} unique directories...`, verbosity);
+      logger.verbose(
+        `Pre-creating ${uniqueDirs.length} unique directories...`,
+        verbosity,
+      );
       for (const dir of uniqueDirs) {
         await ensureDirectoryExists(dir);
       }
     }
 
-    logger.info(`Starting parallel upload with ${maxConcurrency} concurrent uploads...`, verbosity);
-    await new Promise(resolve => setTimeout(resolve, 50));
+    logger.info(
+      `Starting parallel upload with ${maxConcurrency} concurrent uploads...`,
+      verbosity,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     progressTracker.initialize(filesToUpload.length);
     progressTracker.startProgressUpdates();
@@ -223,7 +285,8 @@ export function createUploader(
 
       progressTracker.displaySummary();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.error(`\nUpload process failed: ${errorMessage}`);
 
       if (fileScanner) {

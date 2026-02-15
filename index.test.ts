@@ -17,7 +17,7 @@ describe('CLI', () => {
         '--force',
         '--resume',
         '--chunk-size=100',
-        '--quiet'
+        '--quiet',
       ];
 
       const { values, positionals } = parseArgs({
@@ -34,9 +34,9 @@ describe('CLI', () => {
           quiet: { type: 'boolean' },
           verbose: { type: 'boolean' },
           help: { type: 'boolean', short: 'h' },
-          version: { type: 'boolean', short: 'v' }
+          version: { type: 'boolean', short: 'v' },
         },
-        allowPositionals: true
+        allowPositionals: true,
       });
 
       expect(positionals[0]).toBe('/source/dir');
@@ -56,9 +56,9 @@ describe('CLI', () => {
       const { values } = parseArgs({
         args: args,
         options: {
-          help: { type: 'boolean', short: 'h' }
+          help: { type: 'boolean', short: 'h' },
         },
-        allowPositionals: true
+        allowPositionals: true,
       });
 
       expect(values.help).toBe(true);
@@ -70,28 +70,24 @@ describe('CLI', () => {
       const { values } = parseArgs({
         args: args,
         options: {
-          version: { type: 'boolean', short: 'v' }
+          version: { type: 'boolean', short: 'v' },
         },
-        allowPositionals: true
+        allowPositionals: true,
       });
 
       expect(values.version).toBe(true);
     });
 
     it('should parse daemon mode options', () => {
-      const args = [
-        '/source',
-        '--daemon',
-        '--schedule=0 2 * * *'
-      ];
+      const args = ['/source', '--daemon', '--schedule=0 2 * * *'];
 
       const { values, positionals } = parseArgs({
         args: args,
         options: {
           daemon: { type: 'boolean' },
-          schedule: { type: 'string' }
+          schedule: { type: 'string' },
         },
-        allowPositionals: true
+        allowPositionals: true,
       });
 
       expect(values.daemon).toBe(true);

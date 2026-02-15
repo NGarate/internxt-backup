@@ -1,38 +1,38 @@
 #!/usr/bin/env bun
 
-import { parseArgs } from "node:util";
-import { syncFiles, SyncOptions } from "./src/file-sync";
-import { createScheduler } from "./src/core/scheduler/scheduler";
-import { bold, blue, red } from "./src/utils/logger";
+import { parseArgs } from 'node:util';
+import { syncFiles, SyncOptions } from './src/file-sync';
+import { createScheduler } from './src/core/scheduler/scheduler';
+import { bold, blue, red } from './src/utils/logger';
 
-const packageJson = await Bun.file("package.json").json();
-const VERSION = packageJson.version || "unknown";
+const packageJson = await Bun.file('package.json').json();
+const VERSION = packageJson.version || 'unknown';
 
 function parse() {
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     options: {
-      "source": { type: "string" },
-      "target": { type: "string" },
-      "cores": { type: "string" },
-      "compress": { type: "boolean" },
-      "compression-level": { type: "string" },
-      "schedule": { type: "string" },
-      "daemon": { type: "boolean" },
-      "force": { type: "boolean" },
-      "resume": { type: "boolean" },
-      "chunk-size": { type: "string" },
-      "quiet": { type: "boolean" },
-      "verbose": { type: "boolean" },
-      "help": { type: "boolean", short: "h" },
-      "version": { type: "boolean", short: "v" }
+      source: { type: 'string' },
+      target: { type: 'string' },
+      cores: { type: 'string' },
+      compress: { type: 'boolean' },
+      'compression-level': { type: 'string' },
+      schedule: { type: 'string' },
+      daemon: { type: 'boolean' },
+      force: { type: 'boolean' },
+      resume: { type: 'boolean' },
+      'chunk-size': { type: 'string' },
+      quiet: { type: 'boolean' },
+      verbose: { type: 'boolean' },
+      help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' },
     },
-    allowPositionals: true
+    allowPositionals: true,
   });
 
   return {
     ...values,
-    sourceDir: positionals[0] || values.source
+    sourceDir: positionals[0] || values.source,
   };
 }
 
@@ -42,7 +42,7 @@ ${bold(`Internxt Backup v${VERSION} - A simple CLI for backing up files to Inter
 
 ${bold(`Usage: internxt-backup <source-dir> [options]`)})
 
-${bold("Options:")}
+${bold('Options:')}
   --source=<path>         Source directory to backup (can also be positional)
   --target=<path>         Target folder in Internxt Drive (default: root)
   --cores=<number>        Number of concurrent uploads (default: 2/3 of CPU cores)
@@ -58,7 +58,7 @@ ${bold("Options:")}
   --help, -h              Show this help message
   --version, -v           Show version information
 
-${bold("Examples:")}
+${bold('Examples:')}
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos
   internxt-backup /mnt/disk/Documents --target=/Backups/Docs --compress
   internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
@@ -75,12 +75,12 @@ async function main() {
   try {
     const rawArgs = Bun.argv.slice(2);
 
-    if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
       showHelp();
       process.exit(0);
     }
 
-    if (rawArgs.includes("--version") || rawArgs.includes("-v")) {
+    if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
       showVersion();
       process.exit(0);
     }
@@ -93,7 +93,7 @@ async function main() {
     const args = parse();
 
     if (!args.sourceDir) {
-      console.error(red("Error: Source directory is required"));
+      console.error(red('Error: Source directory is required'));
       console.log();
       showHelp();
       process.exit(1);
@@ -106,9 +106,11 @@ async function main() {
       verbose: args.verbose,
       force: args.force,
       compress: args.compress,
-      compressionLevel: args["compression-level"] ? parseInt(args["compression-level"]) : undefined,
+      compressionLevel: args['compression-level']
+        ? parseInt(args['compression-level'])
+        : undefined,
       resume: args.resume,
-      chunkSize: args["chunk-size"] ? parseInt(args["chunk-size"]) : undefined
+      chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
     };
 
     if (args.daemon && args.schedule) {
@@ -117,13 +119,12 @@ async function main() {
       await scheduler.startDaemon({
         sourceDir: args.sourceDir,
         schedule: args.schedule,
-        syncOptions
+        syncOptions,
       });
       return;
     }
 
     await syncFiles(args.sourceDir, syncOptions);
-
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(red(`Error: ${errorMessage}`));
@@ -134,7 +135,7 @@ async function main() {
 }
 
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(red(`Error: ${errorMessage}`));
     console.log();

@@ -1,26 +1,33 @@
-import fs from "node:fs";
-import path from "node:path";
-import crypto from "node:crypto";
-import { Verbosity, verbose as logVerbose, error as logError } from "../../utils/logger";
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {
+  Verbosity,
+  verbose as logVerbose,
+  error as logError,
+} from '../../utils/logger';
 
-export function createHashCache(cachePath: string, verbosity: number = Verbosity.Normal) {
+export function createHashCache(
+  cachePath: string,
+  verbosity: number = Verbosity.Normal,
+) {
   const cache = new Map<string, string>();
 
   const calculateHash = async (filePath: string): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const hash = crypto.createHash("md5");
+      const hash = crypto.createHash('md5');
       const stream = fs.createReadStream(filePath);
 
-      stream.on("error", reject);
-      stream.on("data", (chunk) => hash.update(chunk));
-      stream.on("end", () => resolve(hash.digest("hex")));
+      stream.on('error', reject);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
     });
   };
 
   const load = async (): Promise<boolean> => {
     try {
       if (fs.existsSync(cachePath)) {
-        const data = await fs.promises.readFile(cachePath, "utf8");
+        const data = await fs.promises.readFile(cachePath, 'utf8');
         const parsed: Record<string, string> = JSON.parse(data);
         for (const [key, value] of Object.entries(parsed)) {
           cache.set(key, value);
@@ -30,7 +37,8 @@ export function createHashCache(cachePath: string, verbosity: number = Verbosity
       }
       return false;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logError(`Error loading hash cache: ${errorMessage}`);
       return false;
     }
@@ -43,7 +51,8 @@ export function createHashCache(cachePath: string, verbosity: number = Verbosity
       logVerbose(`Saved hash cache to ${cachePath}`, verbosity);
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logVerbose(`Error saving hash cache: ${errorMessage}`, verbosity);
       return false;
     }
@@ -56,7 +65,10 @@ export function createHashCache(cachePath: string, verbosity: number = Verbosity
       const storedHash = cache.get(normalizedPath);
 
       if (!storedHash) {
-        logVerbose(`No cached hash for ${normalizedPath}, marking as changed`, verbosity);
+        logVerbose(
+          `No cached hash for ${normalizedPath}, marking as changed`,
+          verbosity,
+        );
         cache.set(normalizedPath, currentHash);
         return true;
       }
@@ -72,7 +84,8 @@ export function createHashCache(cachePath: string, verbosity: number = Verbosity
 
       return changed;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logError(`Error checking file changes: ${errorMessage}`);
       return true;
     }
@@ -89,8 +102,10 @@ export function createHashCache(cachePath: string, verbosity: number = Verbosity
     hasChanged,
     calculateHash,
     updateHash,
-    get size() { return cache.size; },
-    cache
+    get size() {
+      return cache.size;
+    },
+    cache,
   };
 }
 

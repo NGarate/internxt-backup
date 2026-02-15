@@ -2,27 +2,44 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as logger from '../utils/logger';
-import { calculateChecksum, loadJsonFromFile, saveJsonToFile } from '../utils/fs-utils';
+import {
+  calculateChecksum,
+  loadJsonFromFile,
+  saveJsonToFile,
+} from '../utils/fs-utils';
 import { createHashCache } from './upload/hash-cache';
 import { FileInfo, ScanResult, UploadState } from '../interfaces/file-scanner';
 
-export function createFileScanner(sourceDir: string, verbosity: number = logger.Verbosity.Normal, forceUpload: boolean = false) {
+export function createFileScanner(
+  sourceDir: string,
+  verbosity: number = logger.Verbosity.Normal,
+  forceUpload: boolean = false,
+) {
   const resolvedDir = path.resolve(sourceDir);
-  const statePath = path.join(os.tmpdir(), "internxt-backup-state.json");
-  let uploadState: UploadState = { files: {}, lastRun: "" };
+  const statePath = path.join(os.tmpdir(), 'internxt-backup-state.json');
+  let uploadState: UploadState = { files: {}, lastRun: '' };
   const hashCache = createHashCache(
-    path.join(os.tmpdir(), "internxt-backup-hash-cache.json"),
-    verbosity
+    path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
+    verbosity,
   );
 
   const loadState = async (): Promise<void> => {
-    uploadState = await loadJsonFromFile(statePath, { files: {}, lastRun: "" }) as UploadState;
-    logger.verbose(`Loaded state with ${Object.keys(uploadState.files).length} saved file checksums`, verbosity);
+    uploadState = (await loadJsonFromFile(statePath, {
+      files: {},
+      lastRun: '',
+    })) as UploadState;
+    logger.verbose(
+      `Loaded state with ${Object.keys(uploadState.files).length} saved file checksums`,
+      verbosity,
+    );
   };
 
   const saveState = async (): Promise<void> => {
     await saveJsonToFile(statePath, uploadState);
-    logger.verbose(`Saved state with ${Object.keys(uploadState.files).length} file checksums`, verbosity);
+    logger.verbose(
+      `Saved state with ${Object.keys(uploadState.files).length} file checksums`,
+      verbosity,
+    );
   };
 
   const updateFileState = (relativePath: string, checksum: string): void => {
@@ -33,7 +50,10 @@ export function createFileScanner(sourceDir: string, verbosity: number = logger.
     uploadState.lastRun = new Date().toISOString();
   };
 
-  const scanDirectory = async (dir: string, baseDir: string = resolvedDir): Promise<FileInfo[]> => {
+  const scanDirectory = async (
+    dir: string,
+    baseDir: string = resolvedDir,
+  ): Promise<FileInfo[]> => {
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       const files: FileInfo[] = [];
@@ -42,7 +62,7 @@ export function createFileScanner(sourceDir: string, verbosity: number = logger.
         const fullPath = path.join(dir, entry.name);
         const relativePath = path.relative(baseDir, fullPath);
 
-        if (entry.name.startsWith(".") || fullPath === statePath) {
+        if (entry.name.startsWith('.') || fullPath === statePath) {
           continue;
         }
 
@@ -59,35 +79,38 @@ export function createFileScanner(sourceDir: string, verbosity: number = logger.
             absolutePath: fullPath,
             size: stats.size,
             checksum,
-            hasChanged: null
+            hasChanged: null,
           });
         }
       }
 
       return files;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.error(`Error scanning directory ${dir}: ${errorMessage}`);
       return [];
     }
   };
 
-  const determineFilesToUpload = async (files: FileInfo[]): Promise<FileInfo[]> => {
+  const determineFilesToUpload = async (
+    files: FileInfo[],
+  ): Promise<FileInfo[]> => {
     if (forceUpload) {
-      return files.map(f => ({ ...f, hasChanged: true }));
+      return files.map((f) => ({ ...f, hasChanged: true }));
     }
 
     const results = await Promise.all(
       files.map(async (file) => {
         const changed = await hashCache.hasChanged(file.absolutePath);
         return { ...file, hasChanged: changed };
-      })
+      }),
     );
-    return results.filter(f => f.hasChanged);
+    return results.filter((f) => f.hasChanged);
   };
 
   const scan = async (): Promise<ScanResult> => {
-    logger.info("Scanning directory...", verbosity);
+    logger.info('Scanning directory...', verbosity);
 
     await loadState();
     await hashCache.load();
@@ -98,12 +121,21 @@ export function createFileScanner(sourceDir: string, verbosity: number = logger.
     const filesToUpload = await determineFilesToUpload(allFiles);
 
     if (forceUpload && filesToUpload.length > 0) {
-      logger.info(`Force upload enabled. All ${filesToUpload.length} files will be uploaded.`, verbosity);
+      logger.info(
+        `Force upload enabled. All ${filesToUpload.length} files will be uploaded.`,
+        verbosity,
+      );
     } else {
-      logger.info(`${filesToUpload.length} files need to be uploaded.`, verbosity);
+      logger.info(
+        `${filesToUpload.length} files need to be uploaded.`,
+        verbosity,
+      );
     }
 
-    const totalSizeBytes = filesToUpload.reduce((sum, file) => sum + file.size, 0);
+    const totalSizeBytes = filesToUpload.reduce(
+      (sum, file) => sum + file.size,
+      0,
+    );
     const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
 
     if (filesToUpload.length > 0) {

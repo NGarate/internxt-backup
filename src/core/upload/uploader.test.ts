@@ -10,7 +10,7 @@ import {
   createMockFileScanner,
   createMockFileInfo,
   createMockHashCache,
-  createMockProgressTracker
+  createMockProgressTracker,
 } from '../../../test-config/mocks/test-helpers';
 
 describe('createUploader', () => {
@@ -35,7 +35,7 @@ describe('createUploader', () => {
       internxtService: mockInternxtService,
       hashCache: mockHashCache,
       progressTracker: mockProgressTracker,
-      ...overrides
+      ...overrides,
     });
   }
 
@@ -92,13 +92,15 @@ describe('createUploader', () => {
 
     it('should handle upload failures', async () => {
       const failingService = createMockInternxtService();
-      failingService.uploadFile = mock(() => Promise.resolve({
-        success: false,
-        filePath: '/local/path',
-        remotePath: '/remote/path',
-        output: 'Upload failed',
-        error: 'Upload failed'
-      }));
+      failingService.uploadFile = mock(() =>
+        Promise.resolve({
+          success: false,
+          filePath: '/local/path',
+          remotePath: '/remote/path',
+          output: 'Upload failed',
+          error: 'Upload failed',
+        }),
+      );
 
       const uploader = makeUploader({ internxtService: failingService });
       const fileInfo = createMockFileInfo('source/test.txt');
@@ -110,7 +112,9 @@ describe('createUploader', () => {
 
     it('should handle errors during upload', async () => {
       const errorService = createMockInternxtService();
-      errorService.uploadFile = mock(() => { throw new Error('Test error'); });
+      errorService.uploadFile = mock(() => {
+        throw new Error('Test error');
+      });
 
       const uploader = makeUploader({ internxtService: errorService });
       const fileInfo = createMockFileInfo('source/test.txt');
@@ -137,7 +141,7 @@ describe('createUploader', () => {
       const uploader = makeUploader();
       const files = [
         createMockFileInfo('source/file1.txt'),
-        createMockFileInfo('source/file2.txt')
+        createMockFileInfo('source/file2.txt'),
       ];
 
       await uploader.startUpload(files);
@@ -147,11 +151,13 @@ describe('createUploader', () => {
 
     it('should handle CLI not ready', async () => {
       const noCLIService = createMockInternxtService();
-      noCLIService.checkCLI = mock(() => Promise.resolve({
-        installed: false,
-        authenticated: false,
-        error: 'CLI not found'
-      }));
+      noCLIService.checkCLI = mock(() =>
+        Promise.resolve({
+          installed: false,
+          authenticated: false,
+          error: 'CLI not found',
+        }),
+      );
 
       const uploader = makeUploader({ internxtService: noCLIService });
 
@@ -162,11 +168,13 @@ describe('createUploader', () => {
 
     it('should handle CLI not authenticated', async () => {
       const notAuthService = createMockInternxtService();
-      notAuthService.checkCLI = mock(() => Promise.resolve({
-        installed: true,
-        authenticated: false,
-        error: 'Not authenticated'
-      }));
+      notAuthService.checkCLI = mock(() =>
+        Promise.resolve({
+          installed: true,
+          authenticated: false,
+          error: 'Not authenticated',
+        }),
+      );
 
       const uploader = makeUploader({ internxtService: notAuthService });
 
@@ -183,13 +191,21 @@ describe('createUploader', () => {
 
       await uploader.handleFileUpload(fileInfo);
 
-      expect(mockHashCache.updateHash).toHaveBeenCalledWith(fileInfo.absolutePath, fileInfo.checksum);
+      expect(mockHashCache.updateHash).toHaveBeenCalledWith(
+        fileInfo.absolutePath,
+        fileInfo.checksum,
+      );
     });
 
     it('should save hash cache after recording hash on successful upload', async () => {
       const callOrder: string[] = [];
-      mockHashCache.updateHash = mock(() => { callOrder.push('updateHash'); });
-      mockHashCache.save = mock(() => { callOrder.push('save'); return Promise.resolve(true); });
+      mockHashCache.updateHash = mock(() => {
+        callOrder.push('updateHash');
+      });
+      mockHashCache.save = mock(() => {
+        callOrder.push('save');
+        return Promise.resolve(true);
+      });
 
       const uploader = makeUploader();
       const fileInfo = createMockFileInfo('source/test.txt');
@@ -200,13 +216,15 @@ describe('createUploader', () => {
 
     it('should NOT record hash when upload fails', async () => {
       const failingService = createMockInternxtService();
-      failingService.uploadFile = mock(() => Promise.resolve({
-        success: false,
-        filePath: '/local/path',
-        remotePath: '/remote/path',
-        output: 'Upload failed',
-        error: 'Upload failed'
-      }));
+      failingService.uploadFile = mock(() =>
+        Promise.resolve({
+          success: false,
+          filePath: '/local/path',
+          remotePath: '/remote/path',
+          output: 'Upload failed',
+          error: 'Upload failed',
+        }),
+      );
 
       const uploader = makeUploader({ internxtService: failingService });
       const fileInfo = createMockFileInfo('source/test.txt');

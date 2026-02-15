@@ -2,7 +2,15 @@
  * Tests for createHashCache factory function
  */
 
-import { expect, describe, it, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import {
+  expect,
+  describe,
+  it,
+  beforeEach,
+  afterEach,
+  mock,
+  spyOn,
+} from 'bun:test';
 import { createHashCache } from './hash-cache';
 import { Verbosity } from '../../interfaces/logger';
 import * as logger from '../../utils/logger';
@@ -14,8 +22,10 @@ import crypto from 'crypto';
 const mockFs = {
   existsSync: mock((_path: string) => true),
   promises: {
-    readFile: mock((_path: string, _encoding: string) => Promise.resolve('{"file1.txt":"hash1","file2.txt":"hash2"}')),
-    writeFile: mock((_path: string, _data: string) => Promise.resolve())
+    readFile: mock((_path: string, _encoding: string) =>
+      Promise.resolve('{"file1.txt":"hash1","file2.txt":"hash2"}'),
+    ),
+    writeFile: mock((_path: string, _data: string) => Promise.resolve()),
   },
   createReadStream: mock((_path: string) => {
     const mockStream = {
@@ -27,23 +37,30 @@ const mockFs = {
           callback();
         }
         return mockStream;
-      }
+      },
     };
     return mockStream;
-  })
+  }),
 };
 
 // Mock crypto module
 const mockCrypto = {
-  createHash: mock((): {
-    update: (data: string | Buffer) => { digest: () => string };
-    digest: () => string;
-  } => {
-    return {
-      update: mock(function(this: { digest: () => string }, _data: string | Buffer) { return this; }),
-      digest: mock(() => 'mock-hash-value')
-    };
-  })
+  createHash: mock(
+    (): {
+      update: (data: string | Buffer) => { digest: () => string };
+      digest: () => string;
+    } => {
+      return {
+        update: mock(function (
+          this: { digest: () => string },
+          _data: string | Buffer,
+        ) {
+          return this;
+        }),
+        digest: mock(() => 'mock-hash-value'),
+      };
+    },
+  ),
 };
 
 describe('createHashCache', () => {
@@ -58,10 +75,18 @@ describe('createHashCache', () => {
     loggerSpy = spyOn(logger, 'verbose').mockImplementation(() => {});
     spyOn(logger, 'error').mockImplementation(() => {});
 
-    fsExistsSyncSpy = spyOn(fs, 'existsSync').mockImplementation(mockFs.existsSync);
-    fsReadFileSpy = spyOn(fs.promises, 'readFile').mockImplementation(mockFs.promises.readFile);
-    fsWriteFileSpy = spyOn(fs.promises, 'writeFile').mockImplementation(mockFs.promises.writeFile);
-    fsCreateReadStreamSpy = spyOn(fs, 'createReadStream').mockImplementation(mockFs.createReadStream);
+    fsExistsSyncSpy = spyOn(fs, 'existsSync').mockImplementation(
+      mockFs.existsSync,
+    );
+    fsReadFileSpy = spyOn(fs.promises, 'readFile').mockImplementation(
+      mockFs.promises.readFile,
+    );
+    fsWriteFileSpy = spyOn(fs.promises, 'writeFile').mockImplementation(
+      mockFs.promises.writeFile,
+    );
+    fsCreateReadStreamSpy = spyOn(fs, 'createReadStream').mockImplementation(
+      mockFs.createReadStream,
+    );
 
     originalCreateHash = crypto.createHash;
     spyOn(crypto, 'createHash').mockImplementation(mockCrypto.createHash);
@@ -124,7 +149,7 @@ describe('createHashCache', () => {
     it('should load cache data successfully', async () => {
       fsExistsSyncSpy.mockImplementation(() => true);
       fsReadFileSpy.mockImplementation(() =>
-        Promise.resolve('{"file1.txt":"hash1","file2.txt":"hash2"}')
+        Promise.resolve('{"file1.txt":"hash1","file2.txt":"hash2"}'),
       );
 
       const hashCache = createHashCache('/test/path.json');
@@ -155,7 +180,9 @@ describe('createHashCache', () => {
     });
 
     it('should handle save failures gracefully', async () => {
-      fsWriteFileSpy.mockImplementation(() => Promise.reject(new Error('Write failed')));
+      fsWriteFileSpy.mockImplementation(() =>
+        Promise.reject(new Error('Write failed')),
+      );
 
       const hashCache = createHashCache('/test/path.json');
       const result = await hashCache.save();
@@ -175,8 +202,10 @@ describe('createHashCache', () => {
 
       // Mock calculateHash to return a different hash
       mockCrypto.createHash.mockImplementation(() => ({
-        update: mock(function(this: any) { return this; }),
-        digest: mock(() => 'new-hash')
+        update: mock(function (this: any) {
+          return this;
+        }),
+        digest: mock(() => 'new-hash'),
       }));
 
       const hasChanged = await hashCache.hasChanged(filePath);
@@ -194,8 +223,10 @@ describe('createHashCache', () => {
       hashCache.updateHash(filePath, hash);
 
       mockCrypto.createHash.mockImplementation(() => ({
-        update: mock(function(this: any) { return this; }),
-        digest: mock(() => hash)
+        update: mock(function (this: any) {
+          return this;
+        }),
+        digest: mock(() => hash),
       }));
 
       const hasChanged = await hashCache.hasChanged(filePath);
@@ -226,7 +257,7 @@ describe('createHashCache', () => {
               callback(new Error('Test error'));
             }
             return mockStream;
-          }
+          },
         };
         return mockStream;
       });

@@ -28,7 +28,7 @@ describe('syncFiles', () => {
         compress: true,
         compressionLevel: 9,
         resume: true,
-        chunkSize: 100
+        chunkSize: 100,
       };
 
       expect(options.cores).toBe(4);
@@ -50,7 +50,7 @@ describe('syncFiles', () => {
     it('should work with partial options', () => {
       const options: SyncOptions = {
         target: '/custom/target',
-        compress: true
+        compress: true,
       };
 
       expect(options.target).toBe('/custom/target');

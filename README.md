@@ -51,7 +51,7 @@ internxt-backup <source-directory> --target=/Backups/Folder
 - `--cores=<number>` - Number of concurrent uploads (default: 2/3 of CPU cores)
 - `--compress` - Enable gzip compression before upload
 - `--compression-level=<1-9>` - Compression level 1-9 (default: 6)
-- `--schedule=<cron>` - Cron expression for scheduled backups (e.g., "0 2 * * *")
+- `--schedule=<cron>` - Cron expression for scheduled backups (e.g., "0 2 \* \* \*")
 - `--daemon` - Run as a daemon with scheduled backups
 - `--force` - Force upload all files regardless of hash cache
 - `--resume` - Enable resume capability for large files
@@ -122,6 +122,7 @@ internxt-backup /mnt/disk/Archive --target=/Weekly --daemon --schedule="0 0 * * 
 ```
 
 Common cron patterns:
+
 - `0 2 * * *` - Daily at 2 AM
 - `0 */6 * * *` - Every 6 hours
 - `0 0 * * 0` - Weekly on Sunday at midnight
@@ -159,14 +160,15 @@ Releases are fully automated using [semantic-release](https://semantic-release.g
 
 **Commit message format determines version bump:**
 
-| Commit Type | Version Bump | Example |
-|-------------|--------------|---------|
-| `feat:` | Minor (1.0.0 → 1.1.0) | `feat: add parallel upload support` |
-| `fix:` | Patch (1.0.0 → 1.0.1) | `fix: resolve memory leak` |
-| `perf:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | Patch | `docs: update README` |
-| `feat!:` or `BREAKING CHANGE:` | Major (1.0.0 → 2.0.0) | `feat!: redesign CLI interface` |
+| Commit Type                                                                 | Version Bump          | Example                             |
+| --------------------------------------------------------------------------- | --------------------- | ----------------------------------- |
+| `feat:`                                                                     | Minor (1.0.0 → 1.1.0) | `feat: add parallel upload support` |
+| `fix:`                                                                      | Patch (1.0.0 → 1.0.1) | `fix: resolve memory leak`          |
+| `perf:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | Patch                 | `docs: update README`               |
+| `feat!:` or `BREAKING CHANGE:`                                              | Major (1.0.0 → 2.0.0) | `feat!: redesign CLI interface`     |
 
 **Examples:**
+
 ```bash
 # Patch release
 git commit -m "fix: resolve memory leak in file upload"
@@ -230,7 +232,7 @@ bun test --coverage
 bun run typecheck
 
 # Lint code
-bunx oxlint@latest --config .github/oxlintrc.json
+bun run lint
 
 # Build executable for current platform
 bun run build
@@ -287,6 +289,7 @@ internxt login
 If you encounter issues with the global installation:
 
 1. Install from the source directory:
+
    ```bash
    git clone https://github.com/yourusername/internxt-backup.git
    cd internxt-backup
@@ -294,6 +297,7 @@ If you encounter issues with the global installation:
    ```
 
 2. Use `bunx` to run without installing:
+
    ```bash
    bunx internxt-backup --help
    ```

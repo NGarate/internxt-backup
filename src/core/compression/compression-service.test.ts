@@ -3,7 +3,10 @@
  */
 
 import { expect, describe, beforeEach, afterEach, it } from 'bun:test';
-import { createCompressionService, shouldCompress } from './compression-service';
+import {
+  createCompressionService,
+  shouldCompress,
+} from './compression-service';
 import { Verbosity } from '../../interfaces/logger';
 import { writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -40,7 +43,9 @@ describe('createCompressionService', () => {
     });
 
     it('should create with custom verbosity', () => {
-      const verboseService = createCompressionService({ verbosity: Verbosity.Verbose });
+      const verboseService = createCompressionService({
+        verbosity: Verbosity.Verbose,
+      });
       expect(verboseService).toBeDefined();
     });
 
@@ -164,7 +169,9 @@ describe('createCompressionService', () => {
 
     it('should return original path when compression increases size', async () => {
       const testFile = join(tempDir, 'test.txt');
-      const content = Buffer.from(Array.from({ length: 1000 }, () => Math.floor(Math.random() * 256)));
+      const content = Buffer.from(
+        Array.from({ length: 1000 }, () => Math.floor(Math.random() * 256)),
+      );
       await writeFile(testFile, content);
 
       const result = await service.compressForUpload(testFile);
@@ -233,11 +240,15 @@ describe('createCompressionService', () => {
 
   describe('getCompressedRemotePath', () => {
     it('should append .gz to remote path', () => {
-      expect(service.getCompressedRemotePath('/remote/file.txt')).toBe('/remote/file.txt.gz');
+      expect(service.getCompressedRemotePath('/remote/file.txt')).toBe(
+        '/remote/file.txt.gz',
+      );
     });
 
     it('should handle paths with special characters', () => {
-      expect(service.getCompressedRemotePath('/remote/file (1).txt')).toBe('/remote/file (1).txt.gz');
+      expect(service.getCompressedRemotePath('/remote/file (1).txt')).toBe(
+        '/remote/file (1).txt.gz',
+      );
     });
   });
 

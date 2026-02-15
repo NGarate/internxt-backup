@@ -1,6 +1,8 @@
-import * as logger from "../../utils/logger";
+import * as logger from '../../utils/logger';
 
-export function createProgressTracker(_verbosity: number = logger.Verbosity.Normal) {
+export function createProgressTracker(
+  _verbosity: number = logger.Verbosity.Normal,
+) {
   let totalFiles = 0;
   let completedFiles = 0;
   let failedFiles = 0;
@@ -12,10 +14,13 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
 
   const renderBar = (): string => {
     const processed = completedFiles + failedFiles;
-    const percentage = totalFiles > 0 ? Math.floor((processed / totalFiles) * 100) : 0;
+    const percentage =
+      totalFiles > 0 ? Math.floor((processed / totalFiles) * 100) : 0;
     const barWidth = 40;
     const completeWidth = Math.floor((percentage / 100) * barWidth);
-    const bar = "\u2588".repeat(completeWidth) + "\u2591".repeat(barWidth - completeWidth);
+    const bar =
+      '\u2588'.repeat(completeWidth) +
+      '\u2591'.repeat(barWidth - completeWidth);
     return `[${bar}] ${percentage}% | ${processed}/${totalFiles}`;
   };
 
@@ -23,10 +28,15 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
     process.stdout.write = (
       chunk: Uint8Array | string,
       encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void
+      callback?: (err?: Error) => void,
     ): boolean => {
       if (!isTrackingActive) {
-        return originalStdoutWrite.call(process.stdout, chunk, encodingOrCallback as BufferEncoding, callback);
+        return originalStdoutWrite.call(
+          process.stdout,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
       }
 
       const hasNewline = chunk.toString().includes('\n');
@@ -36,7 +46,12 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
         hasDrawnProgressBar = false;
       }
 
-      const result = originalStdoutWrite.call(process.stdout, chunk, encodingOrCallback as BufferEncoding, callback);
+      const result = originalStdoutWrite.call(
+        process.stdout,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
 
       if (hasNewline) {
         const barStr = renderBar();
@@ -50,10 +65,15 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
     process.stderr.write = (
       chunk: Uint8Array | string,
       encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void
+      callback?: (err?: Error) => void,
     ): boolean => {
       if (!isTrackingActive) {
-        return originalStderrWrite.call(process.stderr, chunk, encodingOrCallback as BufferEncoding, callback);
+        return originalStderrWrite.call(
+          process.stderr,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
       }
 
       const hasNewline = chunk.toString().includes('\n');
@@ -63,7 +83,12 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
         hasDrawnProgressBar = false;
       }
 
-      const result = originalStderrWrite.call(process.stderr, chunk, encodingOrCallback as BufferEncoding, callback);
+      const result = originalStderrWrite.call(
+        process.stderr,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
 
       if (hasNewline) {
         const barStr = renderBar();
@@ -81,7 +106,9 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
   };
 
   const displayProgress = () => {
-    if (!isTrackingActive) { return; }
+    if (!isTrackingActive) {
+      return;
+    }
 
     const barStr = renderBar();
     originalStdoutWrite.call(process.stdout, '\r' + barStr + '\x1B[K');
@@ -103,8 +130,12 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
     setupOutputInterception();
   };
 
-  const recordSuccess = () => { completedFiles++; };
-  const recordFailure = () => { failedFiles++; };
+  const recordSuccess = () => {
+    completedFiles++;
+  };
+  const recordFailure = () => {
+    failedFiles++;
+  };
 
   const startProgressUpdates = (intervalMs = 250) => {
     stopProgressUpdates();
@@ -133,9 +164,17 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
     }
     process.stdout.write('\n');
     if (failedFiles === 0) {
-      logger.always(logger.green(`Upload completed successfully! All ${completedFiles} files uploaded.`));
+      logger.always(
+        logger.green(
+          `Upload completed successfully! All ${completedFiles} files uploaded.`,
+        ),
+      );
     } else {
-      logger.always(logger.yellow(`Upload completed with issues: ${completedFiles} succeeded, ${failedFiles} failed.`));
+      logger.always(
+        logger.yellow(
+          `Upload completed with issues: ${completedFiles} succeeded, ${failedFiles} failed.`,
+        ),
+      );
     }
   };
 
@@ -145,7 +184,7 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
   };
 
   const isComplete = (): boolean => {
-    return (completedFiles + failedFiles) === totalFiles && totalFiles > 0;
+    return completedFiles + failedFiles === totalFiles && totalFiles > 0;
   };
 
   return {
@@ -156,7 +195,7 @@ export function createProgressTracker(_verbosity: number = logger.Verbosity.Norm
     stopProgressUpdates,
     displaySummary,
     getProgressPercentage,
-    isComplete
+    isComplete,
   };
 }
 

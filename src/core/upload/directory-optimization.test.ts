@@ -12,7 +12,7 @@ import {
   createMockInternxtService,
   createMockFileInfo,
   createMockHashCache,
-  createMockProgressTracker
+  createMockProgressTracker,
 } from '../../../test-config/mocks/test-helpers';
 
 describe('Directory Creation Optimization', () => {
@@ -34,7 +34,7 @@ describe('Directory Creation Optimization', () => {
     return createUploader(concurrentUploads, targetDir, verbosity, {
       internxtService: mockInternxtService,
       hashCache: mockHashCache,
-      progressTracker: mockProgressTracker
+      progressTracker: mockProgressTracker,
     });
   }
 
@@ -63,7 +63,7 @@ describe('Directory Creation Optimization', () => {
     const files = [
       createMockFileInfo('source/dir1/file1.txt'),
       createMockFileInfo('source/dir2/file2.txt'),
-      createMockFileInfo('source/dir3/subdir/file3.txt')
+      createMockFileInfo('source/dir3/subdir/file3.txt'),
     ];
 
     const events: string[] = [];
@@ -76,26 +76,37 @@ describe('Directory Creation Optimization', () => {
       return (originalCreateDir as Function)(path);
     });
 
-    mockInternxtService.uploadFile = mock((localPath: string, remotePath: string) => {
-      events.push(`upload-file:${remotePath}`);
-      return (originalUploadFile as Function)(localPath, remotePath);
-    });
+    mockInternxtService.uploadFile = mock(
+      (localPath: string, remotePath: string) => {
+        events.push(`upload-file:${remotePath}`);
+        return (originalUploadFile as Function)(localPath, remotePath);
+      },
+    );
 
     // Rebuild uploader with new mocks
     const uploader2 = createUploader(concurrentUploads, targetDir, verbosity, {
       internxtService: mockInternxtService,
       hashCache: mockHashCache,
-      progressTracker: mockProgressTracker
+      progressTracker: mockProgressTracker,
     });
 
     await uploader2.startUpload(files);
 
-    expect(events.filter(e => e.startsWith('create-dir:')).length).toBeGreaterThan(0);
+    expect(
+      events.filter((e) => e.startsWith('create-dir:')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('should efficiently handle a large number of files in deep directory structures', async () => {
     const files = [];
-    const dirStructure = ['dir1', 'dir2', 'dir1/sub1', 'dir1/sub2', 'dir2/sub1', 'dir1/sub1/sub'];
+    const dirStructure = [
+      'dir1',
+      'dir2',
+      'dir1/sub1',
+      'dir1/sub2',
+      'dir2/sub1',
+      'dir1/sub1/sub',
+    ];
 
     for (const dir of dirStructure) {
       for (let i = 1; i <= 4; i++) {
@@ -103,19 +114,27 @@ describe('Directory Creation Optimization', () => {
       }
     }
 
-    mockInternxtService.createFolder = mock(() => Promise.resolve({ success: true, path: '/test', output: '' }));
+    mockInternxtService.createFolder = mock(() =>
+      Promise.resolve({ success: true, path: '/test', output: '' }),
+    );
 
     const uploader = makeUploader();
     await uploader.startUpload(files);
 
     const uniqueDirsCreated = new Set(
-      (mockInternxtService.createFolder as any).mock.calls.map((args: any[]) => args[0])
+      (mockInternxtService.createFolder as any).mock.calls.map(
+        (args: any[]) => args[0],
+      ),
     ).size;
 
     expect(uniqueDirsCreated).toBeLessThanOrEqual(dirStructure.length + 1);
 
-    expect((mockInternxtService.createFolder as any).mock.calls.length).toBeLessThan(files.length);
+    expect(
+      (mockInternxtService.createFolder as any).mock.calls.length,
+    ).toBeLessThan(files.length);
 
-    expect((mockInternxtService.uploadFile as any).mock.calls.length).toBe(files.length);
+    expect((mockInternxtService.uploadFile as any).mock.calls.length).toBe(
+      files.length,
+    );
   });
 });

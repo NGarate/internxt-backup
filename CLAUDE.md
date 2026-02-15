@@ -28,11 +28,14 @@ bun test --coverage
 # Type check
 bun run typecheck
 
-# Lint (oxlint, config in .github/oxlintrc.json)
-bunx oxlint@latest --config .github/oxlintrc.json
+# Lint (oxlint, config in .oxlintrc.json)
+bun run lint
 
 # Lint with auto-fix
-bunx oxlint@latest --config .github/oxlintrc.json --fix
+bun run lint:fix
+
+# Format (oxfmt, Prettier-like config in .oxfmtrc.json)
+bun run format
 
 # Build for distribution
 bun run build
@@ -49,6 +52,7 @@ bun index.ts /path/to/source --target=/Backups
 The orchestrator (`file-sync.ts`) checks Internxt CLI installation/auth, creates a `FileScanner` and `Uploader`, scans the source directory, then uploads changed files. In daemon mode, `BackupScheduler` wraps this in a cron loop.
 
 **Core services** (`src/core/`):
+
 - `internxt/internxt-service.ts` — wraps Internxt CLI commands (upload, mkdir, list-files) via shell exec
 - `file-scanner.ts` — scans directories, calculates MD5 checksums, detects changes against cached state
 - `upload/uploader.ts` — upload orchestrator that coordinates the services below

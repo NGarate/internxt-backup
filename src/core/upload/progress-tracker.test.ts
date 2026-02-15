@@ -2,7 +2,16 @@
  * Tests for createProgressTracker factory function
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn, jest } from 'bun:test';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  mock,
+  spyOn,
+  jest,
+} from 'bun:test';
 import { createProgressTracker } from './progress-tracker';
 import * as logger from '../../utils/logger';
 
@@ -62,7 +71,9 @@ describe('createProgressTracker', () => {
       const tracker = createProgressTracker();
       tracker.initialize(10);
 
-      for (let i = 0; i < 7; i++) { tracker.recordSuccess(); }
+      for (let i = 0; i < 7; i++) {
+        tracker.recordSuccess();
+      }
 
       expect(tracker.getProgressPercentage()).toBe(70);
     });
@@ -73,8 +84,12 @@ describe('createProgressTracker', () => {
 
       expect(tracker.isComplete()).toBe(false);
 
-      for (let i = 0; i < 8; i++) { tracker.recordSuccess(); }
-      for (let i = 0; i < 2; i++) { tracker.recordFailure(); }
+      for (let i = 0; i < 8; i++) {
+        tracker.recordSuccess();
+      }
+      for (let i = 0; i < 2; i++) {
+        tracker.recordFailure();
+      }
 
       expect(tracker.isComplete()).toBe(true);
     });
