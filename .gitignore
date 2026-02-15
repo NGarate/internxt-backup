@@ -78,6 +78,9 @@ $RECYCLE.BIN/
 *.swp
 *.swo
 
+# AI/Claude settings
+.claude/
+
 # Generated upload state files
 .internxt-upload-state.json
 
