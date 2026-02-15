@@ -5,7 +5,7 @@
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
-import { dirname, join, basename } from 'node:path';
+import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import * as logger from '../../utils/logger';
@@ -327,11 +327,8 @@ export class ResumableUploader {
    * Clean up all stale upload states (older than 7 days)
    */
   async cleanupStaleStates(): Promise<void> {
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-    const now = Date.now();
-
     try {
-      const files = await readFile(this.resumeDir, 'utf-8');
+      await readFile(this.resumeDir, 'utf-8');
       // Note: This is a simplified cleanup - in production, you'd use proper directory scanning
       logger.verbose(
         `Cleanup of stale states not fully implemented`,

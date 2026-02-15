@@ -31,9 +31,9 @@ export class BackupScheduler {
   private validateCronExpression(expression: string): boolean {
     try {
       // Try to create a Cron instance to validate
-      const testCron = new Cron(expression, { maxRuns: 1 });
+      new Cron(expression, { maxRuns: 1 });
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

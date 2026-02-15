@@ -2,9 +2,8 @@
  * Tests for File System Utilities
  */
 
-import { expect, describe, it, beforeEach, spyOn, mock } from 'bun:test';
+import { expect, describe, it, beforeEach, spyOn } from 'bun:test';
 import * as fsUtils from './fs-utils';
-import fs from 'fs';
 
 describe('File System Utilities', () => {
   // Test URL path encoding

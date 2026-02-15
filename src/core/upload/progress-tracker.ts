@@ -218,7 +218,7 @@ export class ProgressTracker {
    * Uses originalStdoutWrite directly to bypass the interceptor
    */
   displayProgress() {
-    if (!this.isTrackingActive) return;
+    if (!this.isTrackingActive) {return;}
 
     // Get the progress bar string
     const barStr = this.renderBar();

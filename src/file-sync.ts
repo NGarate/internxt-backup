@@ -4,7 +4,6 @@
  * Optimized for Bun's runtime for maximum performance
  */
 
-import chalk from 'chalk';
 import { getOptimalConcurrency } from './utils/env-utils';
 import * as logger from './utils/logger';
 import FileScanner from './core/file-scanner';

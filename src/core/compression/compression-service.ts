@@ -3,8 +3,7 @@
  * Handles file compression using Bun's native gzip support
  */
 
-import { existsSync } from 'node:fs';
-import { unlink, writeFile, readFile } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { extname, basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as logger from '../../utils/logger';
@@ -92,8 +91,8 @@ export class CompressionService {
    * Returns a valid zlib compression level
    */
   private validateLevel(level: number): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 {
-    if (level < 1) return 1;
-    if (level > 9) return 9;
+    if (level < 1) {return 1;}
+    if (level > 9) {return 9;}
     return level as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   }
 

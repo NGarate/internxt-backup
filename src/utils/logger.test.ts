@@ -22,13 +22,13 @@ describe('Logger Utilities', () => {
     stderrOutput = [];
 
     // Mock process.stdout.write
-    process.stdout.write = function (chunk: any, ...args: any[]): boolean {
+    process.stdout.write = function (chunk: any, ..._args: any[]): boolean {
       stdoutOutput.push(String(chunk));
       return true;
     } as typeof process.stdout.write;
 
     // Mock process.stderr.write
-    process.stderr.write = function (chunk: any, ...args: any[]): boolean {
+    process.stderr.write = function (chunk: any, ..._args: any[]): boolean {
       stderrOutput.push(String(chunk));
       return true;
     } as typeof process.stderr.write;

@@ -5,7 +5,7 @@
 import { expect, describe, beforeEach, afterEach, it } from 'bun:test';
 import { CompressionService } from './compression-service';
 import { Verbosity } from '../../interfaces/logger';
-import { writeFile, unlink, mkdir, rmdir } from 'node:fs/promises';
+import { writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,7 +29,7 @@ describe('CompressionService', () => {
       if (existsSync(tempDir)) {
         await rmdir(tempDir, { recursive: true });
       }
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });

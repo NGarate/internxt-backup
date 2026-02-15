@@ -2,7 +2,7 @@
  * Tests for Environment Utilities
  */
 
-import { expect, describe, it, mock } from 'bun:test';
+import { expect, describe, it } from 'bun:test';
 import * as envUtils from './env-utils';
 
 describe('Environment Utilities', () => {

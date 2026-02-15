@@ -35,11 +35,11 @@ describe('FileUploadManager', () => {
     recordFailure: () => void;
   }
 
-  let mockProgressTracker: MockProgressTracker;
+  let _mockProgressTracker: MockProgressTracker;
 
   beforeEach(() => {
     jest.useFakeTimers();
-    mockProgressTracker = {
+    _mockProgressTracker = {
       recordSuccess: mock(() => {}),
       recordFailure: mock(() => {}),
     };

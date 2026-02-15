@@ -109,11 +109,11 @@ export class InternxtService {
     const { files } = await this.listFolderContents(folderUuid);
     const file = files.find((f) => {
       // Try exact match first
-      if (f.plainName === fileName) return true;
+      if (f.plainName === fileName) {return true;}
       // Reconstruct full name from plainName + type (CLI splits last extension)
       if (f.type) {
         const fullName = `${f.plainName}.${f.type}`;
-        if (fullName === fileName) return true;
+        if (fullName === fileName) {return true;}
       }
       return false;
     });
@@ -341,7 +341,7 @@ export class InternxtService {
           version,
           error: 'Not authenticated. Please run: internxt login',
         };
-      } catch (authError) {
+      } catch {
         return {
           installed: true,
           authenticated: false,
@@ -483,7 +483,8 @@ export class InternxtService {
     remotePath: string,
     onProgress?: (percent: number) => void,
   ): Promise<InternxtUploadResult> {
-    return new Promise(async (resolve) => {
+    return new Promise((resolve) => {
+      (async () => {
       try {
         logger.verbose(
           `Uploading with progress: ${localPath} to ${remotePath}`,
@@ -582,6 +583,7 @@ export class InternxtService {
           error: errorMessage,
         });
       }
+    })();
     });
   }
 

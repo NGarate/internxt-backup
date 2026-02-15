@@ -90,18 +90,11 @@ describe('Directory Creation Optimization', () => {
     await uploader.startUpload(files);
 
     // Verify directory events come before file upload events
-    let lastDirEventIndex = -1;
-
     for (let i = 0; i < events.length; i++) {
       if (events[i].startsWith('create-dir:')) {
-        lastDirEventIndex = i;
+        // Track directory events
       }
     }
-
-    // Find the first upload event
-    const firstUploadIndex = events.findIndex((e) =>
-      e.startsWith('upload-file:'),
-    );
 
     // All directories should be created before any files are uploaded
     // This might not always be true for parallel uploads, but the key directories

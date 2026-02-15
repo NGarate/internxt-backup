@@ -394,10 +394,10 @@ export function createMockFileInfo(
  */
 export function createMockFs() {
   return {
-    readFileSync: mock((path) => Buffer.from('mock-file-content')),
-    writeFileSync: mock((path, content) => {}),
-    existsSync: mock((path) => true),
-    createReadStream: mock((path) => ({
+    readFileSync: mock((_path) => Buffer.from('mock-file-content')),
+    writeFileSync: mock((_path, _content) => {}),
+    existsSync: mock((_path) => true),
+    createReadStream: mock((_path) => ({
       on: (event: string, callback: Function) => {
         if (event === 'data') {
           callback(Buffer.from('mock-stream-data'));
@@ -410,9 +410,9 @@ export function createMockFs() {
       pipe: mock((destination) => destination),
     })),
     promises: {
-      readFile: mock(async (path) => Buffer.from('mock-file-content')),
-      writeFile: mock(async (path, content) => {}),
-      access: mock(async (path) => {}),
+      readFile: mock(async (_path) => Buffer.from('mock-file-content')),
+      writeFile: mock(async (_path, _content) => {}),
+      access: mock(async (_path) => {}),
       stat: mock(async (path) => ({
         isDirectory: () => path.endsWith('/') || !path.includes('.'),
         isFile: () => !path.endsWith('/') && path.includes('.'),

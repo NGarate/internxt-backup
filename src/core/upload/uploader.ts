@@ -124,7 +124,7 @@ export default class Uploader {
    */
   async ensureDirectoryExists(directory: string): Promise<boolean> {
     // Skip if no directory or empty
-    if (!directory) return true;
+    if (!directory) {return true;}
 
     // Skip if we've already created this directory in this session
     if (this.createdDirectories.has(directory)) {

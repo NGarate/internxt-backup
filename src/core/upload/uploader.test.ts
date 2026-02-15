@@ -6,7 +6,6 @@ import { expect, describe, beforeEach, it, spyOn } from 'bun:test';
 import Uploader from '../upload/uploader';
 import { HashCache } from './hash-cache';
 import { Verbosity } from '../../interfaces/logger';
-import * as logger from '../../utils/logger';
 import {
   createMockInternxtService,
   createMockFileScanner,
@@ -23,11 +22,11 @@ describe('Uploader', () => {
   // Mocks
   let mockInternxtService;
   let mockFileScanner;
-  let mockLoggers;
+  let _mockLoggers;
 
   beforeEach(() => {
     // Set up logger mocks
-    mockLoggers = createMockLoggers();
+    _mockLoggers = createMockLoggers();
 
     // Create mock Internxt service
     mockInternxtService = createMockInternxtService();

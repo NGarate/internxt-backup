@@ -114,7 +114,7 @@ export function createMockFs() {
       stat: mock(async (path) => {
         if (statResultMap.has(path)) {
           const result = statResultMap.get(path);
-          if (result instanceof Error) throw result;
+          if (result instanceof Error) {throw result;}
           return result;
         }
         return {
@@ -125,27 +125,27 @@ export function createMockFs() {
         };
       }),
 
-      readFile: mock(async (path, options) => {
+      readFile: mock(async (path, _options) => {
         if (readFileResultMap.has(path)) {
           const result = readFileResultMap.get(path);
-          if (result instanceof Error) throw result;
+          if (result instanceof Error) {throw result;}
           return result;
         }
         return Buffer.from('mock file content');
       }),
 
-      writeFile: mock(async (path, data, options) => {
+      writeFile: mock(async (path, _data, _options) => {
         if (writeFileResultMap.has(path)) {
           const result = writeFileResultMap.get(path);
-          if (result instanceof Error) throw result;
+          if (result instanceof Error) {throw result;}
           return result;
         }
         return undefined;
       }),
 
-      mkdir: mock(async (path, options) => undefined),
-      readdir: mock(async (path, options) => ['file1', 'file2']),
-      unlink: mock(async (path) => undefined),
+      mkdir: mock(async (_path, _options) => undefined),
+      readdir: mock(async (_path, _options) => ['file1', 'file2']),
+      unlink: mock(async (_path) => undefined),
     },
 
     // Synchronous methods
@@ -156,7 +156,7 @@ export function createMockFs() {
     statSync: mock((path) => {
       if (statResultMap.has(path)) {
         const result = statResultMap.get(path);
-        if (result instanceof Error) throw result;
+        if (result instanceof Error) {throw result;}
         return result;
       }
       return {
@@ -167,34 +167,34 @@ export function createMockFs() {
       };
     }),
 
-    readFileSync: mock((path, options) => {
+    readFileSync: mock((path, _options) => {
       if (readFileResultMap.has(path)) {
         const result = readFileResultMap.get(path);
-        if (result instanceof Error) throw result;
+        if (result instanceof Error) {throw result;}
         return result;
       }
       return Buffer.from('mock file content');
     }),
 
-    writeFileSync: mock((path, data, options) => {
+    writeFileSync: mock((path, _data, _options) => {
       if (writeFileResultMap.has(path)) {
         const result = writeFileResultMap.get(path);
-        if (result instanceof Error) throw result;
+        if (result instanceof Error) {throw result;}
         return undefined;
       }
       return undefined;
     }),
 
-    mkdirSync: mock((path, options) => undefined),
-    readdirSync: mock((path, options) => ['file1', 'file2']),
-    unlinkSync: mock((path) => undefined),
+    mkdirSync: mock((_path, _options) => undefined),
+    readdirSync: mock((_path, _options) => ['file1', 'file2']),
+    unlinkSync: mock((_path) => undefined),
 
     // Stream operations
-    createReadStream: mock((path, options) => {
+    createReadStream: mock((_path, _options) => {
       return createMockEventEmitter();
     }),
 
-    createWriteStream: mock((path, options) => {
+    createWriteStream: mock((_path, _options) => {
       return createMockEventEmitter();
     }),
   };

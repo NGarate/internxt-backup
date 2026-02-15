@@ -14,7 +14,7 @@ import {
 import { ResumableUploader } from './resumable-uploader';
 import { InternxtService } from '../internxt/internxt-service';
 import { Verbosity } from '../../interfaces/logger';
-import { writeFile, unlink, mkdir, rmdir } from 'node:fs/promises';
+import { writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -64,7 +64,7 @@ describe('ResumableUploader', () => {
       if (existsSync(tempDir)) {
         await rmdir(tempDir, { recursive: true });
       }
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
     mockUploadFileWithProgress.mockClear();

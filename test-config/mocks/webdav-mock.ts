@@ -64,7 +64,7 @@ export function createClient(config = {}) {
       return Promise.resolve(mockClient.directoryContents || []);
     },
 
-    createDirectory: (path, options = {}) => {
+    createDirectory: (path, _options = {}) => {
       calls.createDirectory.push(path);
       if (mockClient.createDirectoryResult === false) {
         if (
@@ -168,7 +168,7 @@ export function createClient(config = {}) {
     },
 
     // Stream operations
-    createReadStream: (path, options = {}) => {
+    createReadStream: (_path, _options = {}) => {
       // Return a mock readable stream
       const mockReadable = {
         on: (event, callback) => {
@@ -189,7 +189,7 @@ export function createClient(config = {}) {
       return mockReadable;
     },
 
-    createWriteStream: (path, options = {}) => {
+    createWriteStream: (_path, _options = {}) => {
       // Return a mock writable stream
       const mockWritable = {
         on: (event, callback) => {
@@ -201,7 +201,7 @@ export function createClient(config = {}) {
           }
           return mockWritable;
         },
-        write: (data) => true,
+        write: (_data) => true,
         end: () => {},
         destroy: () => {},
       };
@@ -226,19 +226,19 @@ export function createClient(config = {}) {
       return `${mockClient.config.remoteURL || 'https://example.com'}/${path}`;
     },
 
-    search: (path, query, options = {}) => {
+    search: (_path, _query, _options = {}) => {
       return Promise.resolve([]);
     },
 
-    lock: (path, options = {}) => {
+    lock: (_path, _options = {}) => {
       return Promise.resolve({ token: 'mock-lock-token' });
     },
 
-    unlock: (path, token) => {
+    unlock: (_path, _token) => {
       return Promise.resolve(true);
     },
 
-    partialUpdateFileContents: (path, data, options = {}) => {
+    partialUpdateFileContents: (_path, _data, _options = {}) => {
       return Promise.resolve({ status: 200 });
     },
 
