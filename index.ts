@@ -5,16 +5,16 @@
  * A simple, fast CLI for backing up files to Internxt Drive
  */
 
-import { parseArgs } from "node:util";
-import chalk from "chalk";
+import { parseArgs } from 'node:util';
+import chalk from 'chalk';
 
 // Import the syncFiles function
-import { syncFiles, SyncOptions } from "./src/file-sync";
-import { BackupScheduler } from "./src/core/scheduler/scheduler";
+import { syncFiles, SyncOptions } from './src/file-sync';
+import { BackupScheduler } from './src/core/scheduler/scheduler';
 
 // Get version from package.json using Bun's built-in functionality
-const packageJson = await Bun.file("package.json").json();
-const VERSION = packageJson.version || "unknown";
+const packageJson = await Bun.file('package.json').json();
+const VERSION = packageJson.version || 'unknown';
 
 // Parse command line arguments
 function parse() {
@@ -22,35 +22,35 @@ function parse() {
     args: Bun.argv.slice(2),
     options: {
       // Core options
-      "source": { type: "string" },
-      "target": { type: "string" },
-      "cores": { type: "string" },
-      "compress": { type: "boolean" },
-      "compression-level": { type: "string" },
+      source: { type: 'string' },
+      target: { type: 'string' },
+      cores: { type: 'string' },
+      compress: { type: 'boolean' },
+      'compression-level': { type: 'string' },
 
       // Scheduling
-      "schedule": { type: "string" },
-      "daemon": { type: "boolean" },
+      schedule: { type: 'string' },
+      daemon: { type: 'boolean' },
 
       // Behavior
-      "force": { type: "boolean" },
-      "resume": { type: "boolean" },
-      "chunk-size": { type: "string" },
+      force: { type: 'boolean' },
+      resume: { type: 'boolean' },
+      'chunk-size': { type: 'string' },
 
       // Output
-      "quiet": { type: "boolean" },
-      "verbose": { type: "boolean" },
+      quiet: { type: 'boolean' },
+      verbose: { type: 'boolean' },
 
       // Help
-      "help": { type: "boolean", short: "h" },
-      "version": { type: "boolean", short: "v" }
+      help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' },
     },
-    allowPositionals: true
+    allowPositionals: true,
   });
 
   return {
     ...values,
-    sourceDir: positionals[0] || values.source
+    sourceDir: positionals[0] || values.source,
   };
 }
 
@@ -61,7 +61,7 @@ ${chalk.bold(`Internxt Backup v${VERSION} - A simple CLI for backing up files to
 
 ${chalk.bold(`Usage: internxt-backup <source-dir> [options]`)})
 
-${chalk.bold("Options:")}
+${chalk.bold('Options:')}
   --source=<path>         Source directory to backup (can also be positional)
   --target=<path>         Target folder in Internxt Drive (default: root)
   --cores=<number>        Number of concurrent uploads (default: 2/3 of CPU cores)
@@ -77,7 +77,7 @@ ${chalk.bold("Options:")}
   --help, -h              Show this help message
   --version, -v           Show version information
 
-${chalk.bold("Examples:")}
+${chalk.bold('Examples:')}
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos
   internxt-backup /mnt/disk/Documents --target=/Backups/Docs --compress
   internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
@@ -98,13 +98,13 @@ async function main() {
     const rawArgs = Bun.argv.slice(2);
 
     // Check for help flag first
-    if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
       showHelp();
       process.exit(0);
     }
 
     // Check for version flag
-    if (rawArgs.includes("--version") || rawArgs.includes("-v")) {
+    if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
       showVersion();
       process.exit(0);
     }
@@ -120,7 +120,7 @@ async function main() {
 
     // Check for required source directory
     if (!args.sourceDir) {
-      console.error(chalk.red("Error: Source directory is required"));
+      console.error(chalk.red('Error: Source directory is required'));
       console.log();
       showHelp();
       process.exit(1);
@@ -134,26 +134,29 @@ async function main() {
       verbose: args.verbose,
       force: args.force,
       compress: args.compress,
-      compressionLevel: args["compression-level"] ? parseInt(args["compression-level"]) : undefined,
+      compressionLevel: args['compression-level']
+        ? parseInt(args['compression-level'])
+        : undefined,
       resume: args.resume,
-      chunkSize: args["chunk-size"] ? parseInt(args["chunk-size"]) : undefined
+      chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
     };
 
     // Handle daemon mode with scheduling
     if (args.daemon && args.schedule) {
-      console.log(chalk.blue(`Starting daemon mode with schedule: ${args.schedule}`));
+      console.log(
+        chalk.blue(`Starting daemon mode with schedule: ${args.schedule}`),
+      );
       const scheduler = new BackupScheduler();
       await scheduler.startDaemon({
         sourceDir: args.sourceDir,
         schedule: args.schedule,
-        syncOptions
+        syncOptions,
       });
       return;
     }
 
     // Run the main sync function with the parsed arguments
     await syncFiles(args.sourceDir, syncOptions);
-
   } catch (error: any) {
     console.error(chalk.red(`Error: ${error.message}`));
     console.log();
@@ -164,7 +167,7 @@ async function main() {
 
 // Run the main function
 if (import.meta.main) {
-  main().catch(err => {
+  main().catch((err) => {
     console.error(chalk.red(`Error: ${err.message}`));
     console.log();
     showHelp();

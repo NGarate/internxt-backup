@@ -3,8 +3,8 @@
  * Handles tracking and displaying upload progress
  */
 
-import chalk from "chalk";
-import * as logger from "../../utils/logger";
+import chalk from 'chalk';
+import * as logger from '../../utils/logger';
 
 /**
  * ProgressTracker class for monitoring upload progress
@@ -16,13 +16,9 @@ export class ProgressTracker {
   failedFiles: number;
   updateInterval: NodeJS.Timeout | null;
   isTrackingActive: boolean;
-  originalConsoleLog: typeof console.log;
-  originalConsoleInfo: typeof console.info;
-  originalConsoleWarn: typeof console.warn;
-  originalConsoleError: typeof console.error;
-  lastMessageTime: number;
+  originalStdoutWrite: typeof process.stdout.write;
+  originalStderrWrite: typeof process.stderr.write;
   hasDrawnProgressBar: boolean;
-  inOverrideFunction: boolean;
 
   /**
    * Create a new ProgressTracker
@@ -35,21 +31,9 @@ export class ProgressTracker {
     this.failedFiles = 0;
     this.updateInterval = null;
     this.isTrackingActive = false;
-
-    // Store original console methods
-    this.originalConsoleLog = console.log;
-    this.originalConsoleInfo = console.info;
-    this.originalConsoleWarn = console.warn;
-    this.originalConsoleError = console.error;
-
-    // Track last message time to determine if we need to redraw progress
-    this.lastMessageTime = 0;
-
-    // Store whether we've drawn the progress bar yet
+    this.originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    this.originalStderrWrite = process.stderr.write.bind(process.stderr);
     this.hasDrawnProgressBar = false;
-
-    // Track if we're currently in an override function to prevent recursive calls
-    this.inOverrideFunction = false;
   }
 
   /**
@@ -60,77 +44,120 @@ export class ProgressTracker {
     this.totalFiles = totalFiles;
     this.completedFiles = 0;
     this.failedFiles = 0;
-    this.lastMessageTime = 0;
     this.hasDrawnProgressBar = false;
-    this.inOverrideFunction = false;
-    this.setupConsoleOverrides();
+    this.setupOutputInterception();
   }
 
   /**
-   * Set up console method overrides to preserve progress bar
+   * Set up process.stdout.write and process.stderr.write interception
+   * to preserve the progress bar when other output occurs
    */
-  setupConsoleOverrides() {
-    const self = this;
+  setupOutputInterception() {
+    process.stdout.write = (
+      chunk: Uint8Array | string,
+      encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+      callback?: (err?: Error) => void,
+    ): boolean => {
+      if (!this.isTrackingActive) {
+        return this.originalStdoutWrite.call(
+          process.stdout,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
+      }
 
-    // Create a common handler for all console methods
-    const createOverride = (originalMethod: typeof console.log) => {
-      return function(...args: unknown[]) {
-        // Prevent recursive calls if we're already inside an override
-        if (self.inOverrideFunction) {
-          return originalMethod.apply(console, args);
-        }
+      // Check if content has newline
+      const hasNewline = chunk.toString().includes('\n');
 
-        self.inOverrideFunction = true;
+      // Clear the progress bar line before other output
+      if (this.hasDrawnProgressBar) {
+        this.originalStdoutWrite.call(process.stdout, '\r\x1B[K');
+        this.hasDrawnProgressBar = false;
+      }
 
-        try {
-          if (self.isTrackingActive) {
-            // If we've shown a progress bar, clear it
-            if (self.hasDrawnProgressBar) {
-              // Clear the line with progress bar
-              process.stdout.write('\r\x1B[K');
-            }
+      // Write the actual content
+      const result = this.originalStdoutWrite.call(
+        process.stdout,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
 
-            // Print the message
-            originalMethod.apply(console, args);
+      // Only redraw progress bar if content ends with newline
+      // This ensures the bar appears on its own line below the message
+      if (hasNewline) {
+        const barStr = this.renderBar();
+        this.originalStdoutWrite.call(process.stdout, barStr + '\x1B[K');
+        this.hasDrawnProgressBar = true;
+      }
 
-            // Ensure the message ends with a newline
-            const lastArg = args[args.length - 1];
-            if (typeof lastArg === 'string' && !lastArg.endsWith('\n')) {
-              process.stdout.write('\n');
-            }
-
-            // Record when this message was shown
-            self.lastMessageTime = Date.now();
-
-            // Redraw progress bar on a new line if enough time has passed
-            const now = Date.now();
-            if (now - self.lastMessageTime > 100) {
-              process.nextTick(() => self.displayProgress());
-            }
-          } else {
-            originalMethod.apply(console, args);
-          }
-        } finally {
-          self.inOverrideFunction = false;
-        }
-      };
+      return result;
     };
 
-    // Override console methods to preserve progress bar
-    console.log = createOverride(this.originalConsoleLog);
-    console.info = createOverride(this.originalConsoleInfo);
-    console.warn = createOverride(this.originalConsoleWarn);
-    console.error = createOverride(this.originalConsoleError);
+    process.stderr.write = (
+      chunk: Uint8Array | string,
+      encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
+      callback?: (err?: Error) => void,
+    ): boolean => {
+      if (!this.isTrackingActive) {
+        return this.originalStderrWrite.call(
+          process.stderr,
+          chunk,
+          encodingOrCallback as BufferEncoding,
+          callback,
+        );
+      }
+
+      // Check if content has newline
+      const hasNewline = chunk.toString().includes('\n');
+
+      // Clear the progress bar on stdout before stderr output
+      if (this.hasDrawnProgressBar) {
+        this.originalStdoutWrite.call(process.stdout, '\r\x1B[K');
+        this.hasDrawnProgressBar = false;
+      }
+
+      // Write to stderr
+      const result = this.originalStderrWrite.call(
+        process.stderr,
+        chunk,
+        encodingOrCallback as BufferEncoding,
+        callback,
+      );
+
+      // Only redraw progress bar if content ends with newline
+      if (hasNewline) {
+        const barStr = this.renderBar();
+        this.originalStdoutWrite.call(process.stdout, barStr + '\x1B[K');
+        this.hasDrawnProgressBar = true;
+      }
+
+      return result;
+    };
   }
 
   /**
-   * Restore original console methods
+   * Restore original write methods
    */
-  restoreConsole() {
-    console.log = this.originalConsoleLog;
-    console.info = this.originalConsoleInfo;
-    console.warn = this.originalConsoleWarn;
-    console.error = this.originalConsoleError;
+  restoreOutput() {
+    process.stdout.write = this.originalStdoutWrite;
+    process.stderr.write = this.originalStderrWrite;
+  }
+
+  /**
+   * Render the progress bar string (pure computation, no I/O)
+   * @returns {string} The progress bar string
+   */
+  private renderBar(): string {
+    const processed = this.completedFiles + this.failedFiles;
+    const percentage =
+      this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
+    const barWidth = 40;
+    const completeWidth = Math.floor((percentage / 100) * barWidth);
+    const bar =
+      '█'.repeat(completeWidth) + '░'.repeat(barWidth - completeWidth);
+    return `[${bar}] ${percentage}% | ${processed}/${this.totalFiles}`;
   }
 
   /**
@@ -154,15 +181,15 @@ export class ProgressTracker {
   startProgressUpdates(intervalMs = 250) {
     // Clear any existing interval first
     this.stopProgressUpdates();
-    
+
     this.isTrackingActive = true;
-    
-    // Add a blank line for separation
-    process.stdout.write('\n');
-    
+
+    // Add a blank line for separation (bypass interceptor)
+    this.originalStdoutWrite.call(process.stdout, '\n');
+
     // Start a new interval
     this.updateInterval = setInterval(() => this.displayProgress(), intervalMs);
-    
+
     // Display initial progress
     this.displayProgress();
   }
@@ -175,42 +202,39 @@ export class ProgressTracker {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
     }
-    
+
     this.isTrackingActive = false;
-    this.restoreConsole();
-    
+    this.restoreOutput();
+
     // Clear the current line to remove progress bar
     if (this.hasDrawnProgressBar) {
-      process.stdout.write('\r\x1B[K');
+      this.originalStdoutWrite.call(process.stdout, '\r\x1B[K');
+      this.hasDrawnProgressBar = false;
     }
   }
 
   /**
    * Display a progress bar showing upload status
-   * Makes sure the progress bar is always displayed on its own line
+   * Uses originalStdoutWrite directly to bypass the interceptor
    */
   displayProgress() {
-    if (!this.isTrackingActive) return;
-    
-    const processed = this.completedFiles + this.failedFiles;
-    const percentage = this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
-    const barWidth = 40;
-    const completeWidth = Math.floor((percentage / 100) * barWidth);
-    const bar = "█".repeat(completeWidth) + "░".repeat(barWidth - completeWidth);
-    
-    // If we've already drawn a progress bar, clear it first
-    if (this.hasDrawnProgressBar) {
-      process.stdout.write('\r\x1B[K');
-    } else {
-      this.hasDrawnProgressBar = true;
+    if (!this.isTrackingActive) {
+      return;
     }
-    
-    // Draw the progress bar without a newline
-    process.stdout.write(`[${bar}] ${percentage}% | ${processed}/${this.totalFiles}\n`);
-    
+
+    // Get the progress bar string
+    const barStr = this.renderBar();
+
+    // Always use \r to move to start of line and overwrite
+    // This works whether the bar exists or not
+    this.originalStdoutWrite.call(process.stdout, '\r' + barStr + '\x1B[K');
+    this.hasDrawnProgressBar = true;
+
     // If all files processed, add a newline and stop updates
+    const processed = this.completedFiles + this.failedFiles;
     if (processed === this.totalFiles && this.totalFiles > 0) {
-      process.stdout.write('\n');
+      this.originalStdoutWrite.call(process.stdout, '\n');
+      this.hasDrawnProgressBar = false;
       this.stopProgressUpdates();
     }
   }
@@ -229,9 +253,17 @@ export class ProgressTracker {
 
     // Always show the final summary, regardless of verbosity
     if (this.failedFiles === 0) {
-      logger.always(chalk.green(`Upload completed successfully! All ${this.completedFiles} files uploaded.`));
+      logger.always(
+        chalk.green(
+          `Upload completed successfully! All ${this.completedFiles} files uploaded.`,
+        ),
+      );
     } else {
-      logger.always(chalk.yellow(`Upload completed with issues: ${this.completedFiles} succeeded, ${this.failedFiles} failed.`));
+      logger.always(
+        chalk.yellow(
+          `Upload completed with issues: ${this.completedFiles} succeeded, ${this.failedFiles} failed.`,
+        ),
+      );
     }
   }
 
@@ -241,7 +273,9 @@ export class ProgressTracker {
    */
   getProgressPercentage() {
     const processed = this.completedFiles + this.failedFiles;
-    return this.totalFiles > 0 ? Math.floor((processed / this.totalFiles) * 100) : 0;
+    return this.totalFiles > 0
+      ? Math.floor((processed / this.totalFiles) * 100)
+      : 0;
   }
 
   /**
@@ -249,6 +283,9 @@ export class ProgressTracker {
    * @returns {boolean} True if all files have been processed
    */
   isComplete() {
-    return (this.completedFiles + this.failedFiles) === this.totalFiles && this.totalFiles > 0;
+    return (
+      this.completedFiles + this.failedFiles === this.totalFiles &&
+      this.totalFiles > 0
+    );
   }
-} 
+}

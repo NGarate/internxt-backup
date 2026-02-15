@@ -16,10 +16,10 @@ The testing setup has been simplified to leverage Bun's native TypeScript and te
 Import test utilities directly from the consolidated helpers file:
 
 ```typescript
-import { 
-  skipIfSpyingIssues, 
-  createMockWebDAVService, 
-  spyOn 
+import {
+  skipIfSpyingIssues,
+  createMockWebDAVService,
+  spyOn,
 } from '../../test-config/mocks/test-helpers';
 
 // Or import everything
@@ -58,4 +58,4 @@ Bun natively supports TypeScript in tests without additional configuration. The 
 
 1. Handle mocking of common components
 2. Provide utilities for common testing scenarios
-3. Work around Bun's current limitations with certain types of mocking 
+3. Work around Bun's current limitations with certain types of mocking

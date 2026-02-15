@@ -7,7 +7,11 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as logger from '../utils/logger';
-import { calculateChecksum, loadJsonFromFile, saveJsonToFile } from '../utils/fs-utils';
+import {
+  calculateChecksum,
+  loadJsonFromFile,
+  saveJsonToFile,
+} from '../utils/fs-utils';
 import { HashCache } from './upload/hash-cache';
 import { FileInfo, ScanResult, UploadState } from '../interfaces/file-scanner';
 
@@ -28,27 +32,36 @@ export default class FileScanner {
    * @param {number} verbosity - Verbosity level
    * @param {boolean} forceUpload - Whether to force upload all files regardless of change
    */
-  constructor(sourceDir: string, verbosity: number = logger.Verbosity.Normal, forceUpload: boolean = false) {
+  constructor(
+    sourceDir: string,
+    verbosity: number = logger.Verbosity.Normal,
+    forceUpload: boolean = false,
+  ) {
     this.sourceDir = path.resolve(sourceDir);
-    this.statePath = path.join(os.tmpdir(), "internxt-backup-state.json");
-    this.uploadState = { files: {}, lastRun: "" };
+    this.statePath = path.join(os.tmpdir(), 'internxt-backup-state.json');
+    this.uploadState = { files: {}, lastRun: '' };
     this.verbosity = verbosity;
     this.forceUpload = forceUpload;
-    
+
     // Use the same hash cache that the uploader will use
     this.hashCache = new HashCache(
-      path.join(os.tmpdir(), "internxt-backup-hash-cache.json"),
-      verbosity
+      path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
+      verbosity,
     );
-    this.hashCache.load();
   }
 
   /**
    * Load the saved state from the state file
    */
   async loadState(): Promise<void> {
-    this.uploadState = await loadJsonFromFile(this.statePath, { files: {}, lastRun: "" }) as UploadState;
-    logger.verbose(`Loaded state with ${Object.keys(this.uploadState.files).length} saved file checksums`, this.verbosity);
+    this.uploadState = (await loadJsonFromFile(this.statePath, {
+      files: {},
+      lastRun: '',
+    })) as UploadState;
+    logger.verbose(
+      `Loaded state with ${Object.keys(this.uploadState.files).length} saved file checksums`,
+      this.verbosity,
+    );
   }
 
   /**
@@ -56,7 +69,10 @@ export default class FileScanner {
    */
   async saveState(): Promise<void> {
     await saveJsonToFile(this.statePath, this.uploadState);
-    logger.verbose(`Saved state with ${Object.keys(this.uploadState.files).length} file checksums`, this.verbosity);
+    logger.verbose(
+      `Saved state with ${Object.keys(this.uploadState.files).length} file checksums`,
+      this.verbosity,
+    );
   }
 
   /**
@@ -81,7 +97,10 @@ export default class FileScanner {
    * @param {string} baseDir - Base directory for calculating relative paths
    * @returns {Promise<Array<FileInfo>>} Array of file information objects
    */
-  async scanDirectory(dir: string, baseDir: string = this.sourceDir): Promise<FileInfo[]> {
+  async scanDirectory(
+    dir: string,
+    baseDir: string = this.sourceDir,
+  ): Promise<FileInfo[]> {
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       const files: FileInfo[] = [];
@@ -91,7 +110,7 @@ export default class FileScanner {
         const relativePath = path.relative(baseDir, fullPath);
 
         // Skip hidden files and the state file
-        if (entry.name.startsWith(".") || fullPath === this.statePath) {
+        if (entry.name.startsWith('.') || fullPath === this.statePath) {
           continue;
         }
 
@@ -100,7 +119,10 @@ export default class FileScanner {
           files.push(...subDirFiles);
         } else if (entry.isFile()) {
           const stats = fs.statSync(fullPath);
-          logger.verbose(`Calculating checksum for ${relativePath}`, this.verbosity);
+          logger.verbose(
+            `Calculating checksum for ${relativePath}`,
+            this.verbosity,
+          );
           const checksum = await calculateChecksum(fullPath);
 
           files.push({
@@ -108,14 +130,15 @@ export default class FileScanner {
             absolutePath: fullPath,
             size: stats.size,
             checksum,
-            hasChanged: null // Will be determined later
+            hasChanged: null, // Will be determined later
           });
         }
       }
 
       return files;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       logger.error(`Error scanning directory ${dir}: ${errorMessage}`);
       return [];
     }
@@ -128,7 +151,7 @@ export default class FileScanner {
    */
   async determineFilesToUpload(files: FileInfo[]): Promise<FileInfo[]> {
     const filesToUpload: FileInfo[] = [];
-    
+
     for (const file of files) {
       // If force upload is enabled, mark all files as changed
       if (this.forceUpload) {
@@ -136,16 +159,16 @@ export default class FileScanner {
         filesToUpload.push(file);
         continue;
       }
-      
+
       // Otherwise, check the hash cache as usual
       const hasChanged = await this.hashCache.hasChanged(file.absolutePath);
       file.hasChanged = hasChanged;
-      
+
       if (hasChanged) {
         filesToUpload.push(file);
       }
     }
-    
+
     return filesToUpload;
   }
 
@@ -154,10 +177,11 @@ export default class FileScanner {
    * @returns {Promise<ScanResult>} Object containing scan results
    */
   async scan(): Promise<ScanResult> {
-    logger.info("Scanning directory...", this.verbosity);
-    
-    // Load previous state
+    logger.info('Scanning directory...', this.verbosity);
+
+    // Load previous state and hash cache
     await this.loadState();
+    await this.hashCache.load();
 
     // Scan for files
     const allFiles = await this.scanDirectory(this.sourceDir);
@@ -165,17 +189,26 @@ export default class FileScanner {
 
     // Determine which files need uploading
     const filesToUpload = await this.determineFilesToUpload(allFiles);
-    
+
     if (this.forceUpload && filesToUpload.length > 0) {
-      logger.info(`Force upload enabled. All ${filesToUpload.length} files will be uploaded.`, this.verbosity);
+      logger.info(
+        `Force upload enabled. All ${filesToUpload.length} files will be uploaded.`,
+        this.verbosity,
+      );
     } else {
-      logger.info(`${filesToUpload.length} files need to be uploaded.`, this.verbosity);
+      logger.info(
+        `${filesToUpload.length} files need to be uploaded.`,
+        this.verbosity,
+      );
     }
 
     // Calculate total size
-    const totalSizeBytes = filesToUpload.reduce((sum, file) => sum + file.size, 0);
+    const totalSizeBytes = filesToUpload.reduce(
+      (sum, file) => sum + file.size,
+      0,
+    );
     const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
-    
+
     if (filesToUpload.length > 0) {
       logger.info(`Total upload size: ${totalSizeMB} MB.`, this.verbosity);
     }
@@ -184,7 +217,7 @@ export default class FileScanner {
       allFiles,
       filesToUpload,
       totalSizeBytes,
-      totalSizeMB
+      totalSizeMB,
     };
   }
-} 
+}

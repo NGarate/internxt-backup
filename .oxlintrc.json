@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "off",
+    "style": "off",
+    "perf": "off",
+    "pedantic": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "no-console": "off",
+    "no-debugger": "error",
+    "no-unused-vars": "error",
+    "no-empty": "error",
+    "no-duplicate-imports": "error",
+    "prefer-const": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "all"],
+    "no-var": "error",
+    "no-throw-literal": "error"
+  },
+  "ignorePatterns": ["dist/", "node_modules/"]
+}

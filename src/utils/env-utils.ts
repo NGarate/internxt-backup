@@ -14,10 +14,10 @@ export function getOptimalConcurrency(userSpecified?: number): number {
   if (userSpecified && !isNaN(userSpecified) && userSpecified > 0) {
     return userSpecified;
   }
-  
+
   // Get the total number of CPU cores
   const totalCores = os.cpus().length;
-  
+
   // Default to 2/3 of available cores, minimum 1
-  return Math.max(1, Math.floor(totalCores * (2/3)));
+  return Math.max(1, Math.floor(totalCores * (2 / 3)));
 }

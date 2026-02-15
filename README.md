@@ -1,5 +1,8 @@
 # Internxt Backup
 
+[![CI](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml/badge.svg)](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml)
+[![Release](https://github.com/ngarate/internxt-backup/actions/workflows/release.yml/badge.svg)](https://github.com/ngarate/internxt-backup/releases)
+
 A simple, fast, and efficient tool for backing up files to Internxt Drive using the Internxt CLI.
 
 ## Features
@@ -17,7 +20,7 @@ A simple, fast, and efficient tool for backing up files to Internxt Drive using 
 
 ## Requirements
 
-- [Bun](https://bun.sh/) runtime ≥ 1.0.0
+- [Bun](https://bun.sh/) runtime ≥ 1.3.8
 - [Internxt CLI](https://github.com/internxt/cli) installed and authenticated
 
 ## Installation
@@ -48,7 +51,7 @@ internxt-backup <source-directory> --target=/Backups/Folder
 - `--cores=<number>` - Number of concurrent uploads (default: 2/3 of CPU cores)
 - `--compress` - Enable gzip compression before upload
 - `--compression-level=<1-9>` - Compression level 1-9 (default: 6)
-- `--schedule=<cron>` - Cron expression for scheduled backups (e.g., "0 2 * * *")
+- `--schedule=<cron>` - Cron expression for scheduled backups (e.g., "0 2 \* \* \*")
 - `--daemon` - Run as a daemon with scheduled backups
 - `--force` - Force upload all files regardless of hash cache
 - `--resume` - Enable resume capability for large files
@@ -119,18 +122,94 @@ internxt-backup /mnt/disk/Archive --target=/Weekly --daemon --schedule="0 0 * * 
 ```
 
 Common cron patterns:
+
 - `0 2 * * *` - Daily at 2 AM
 - `0 */6 * * *` - Every 6 hours
 - `0 0 * * 0` - Weekly on Sunday at midnight
 - `0 0 1 * *` - Monthly on the 1st
 
-## For Developers
+## CI/CD
 
-If you want to contribute to the project or use it for development:
+This project uses **GitHub Actions** for continuous integration and deployment with automated semantic versioning.
+
+### Workflow Overview
+
+```text
+main branch (protected)
+    │
+    ├── Pull Request → CI checks (lint, test, typecheck, security) → Merge
+    │
+    └── Push to main
+        │
+        └── semantic-release analyzes commits
+            │
+            ├── No release needed → Skip
+            │
+            └── Release needed
+                ├── Bump version in package.json
+                ├── Generate CHANGELOG.md
+                ├── Create Git tag (vX.Y.Z)
+                └── Trigger release workflow
+                    └── Build cross-platform executables
+                        └── Upload to GitHub Release
+```
+
+### Automated Release Process
+
+Releases are fully automated using [semantic-release](https://semantic-release.gitbook.io/):
+
+**Commit message format determines version bump:**
+
+| Commit Type                                                                 | Version Bump          | Example                             |
+| --------------------------------------------------------------------------- | --------------------- | ----------------------------------- |
+| `feat:`                                                                     | Minor (1.0.0 → 1.1.0) | `feat: add parallel upload support` |
+| `fix:`                                                                      | Patch (1.0.0 → 1.0.1) | `fix: resolve memory leak`          |
+| `perf:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:` | Patch                 | `docs: update README`               |
+| `feat!:` or `BREAKING CHANGE:`                                              | Major (1.0.0 → 2.0.0) | `feat!: redesign CLI interface`     |
+
+**Examples:**
+
+```bash
+# Patch release
+git commit -m "fix: resolve memory leak in file upload"
+git commit -m "docs: add troubleshooting guide"
+git commit -m "perf: optimize compression algorithm"
+
+# Minor release
+git commit -m "feat: add resume capability for interrupted uploads"
+
+# Major release (breaking change)
+git commit -m "feat!: drop support for Node.js 14"
+# OR
+git commit -m "feat: redesign configuration format
+
+BREAKING CHANGE: config file format changed from JSON to YAML"
+```
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for detailed commit conventions.
+
+### Download Pre-built Executables
+
+Pre-built executables are available for:
+
+- Linux (x64, ARM64)
+- macOS (x64, ARM64/Apple Silicon)
+- Windows (x64)
+
+Download from [GitHub Releases](https://github.com/ngarate/internxt-backup/releases).
+
+## Development
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) runtime ≥ 1.3.8
+- Git
+
+### Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/internxt-backup.git
+git clone https://github.com/ngarate/internxt-backup.git
 cd internxt-backup
 
 # Install dependencies
@@ -138,9 +217,56 @@ bun install
 
 # Run the tool during development
 bun index.ts --help
+```
 
-# Install locally for testing
-bun link
+### Development Commands
+
+```bash
+# Run tests
+bun test
+
+# Run tests with coverage
+bun test --coverage
+
+# Type check
+bun run typecheck
+
+# Lint code
+bun run lint
+
+# Build executable for current platform
+bun run build
+
+# Build for specific platform
+bun build --compile --target bun-linux-x64 --outfile ./dist/internxt-backup ./index.ts
+```
+
+### Available Build Targets
+
+- `bun-linux-x64` - Linux x86_64
+- `bun-linux-arm64` - Linux ARM64
+- `bun-darwin-x64` - macOS Intel
+- `bun-darwin-arm64` - macOS Apple Silicon
+- `bun-windows-x64` - Windows x64
+
+### Project Structure
+
+```
+.
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml              # CI pipeline
+│   │   ├── release.yml         # Release builds
+│   │   └── semantic-release.yml # Automated versioning
+│   ├── dependabot.yml          # Automated dependency updates
+│   └── oxlintrc.json          # Linting rules
+├── src/                       # Source modules
+├── index.ts                   # Main entry point
+├── index.test.ts             # Tests
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript configuration
+├── .releaserc.json           # Semantic release config
+└── README.md                 # This file
 ```
 
 ## Troubleshooting
@@ -163,6 +289,7 @@ internxt login
 If you encounter issues with the global installation:
 
 1. Install from the source directory:
+
    ```bash
    git clone https://github.com/yourusername/internxt-backup.git
    cd internxt-backup
@@ -170,6 +297,7 @@ If you encounter issues with the global installation:
    ```
 
 2. Use `bunx` to run without installing:
+
    ```bash
    bunx internxt-backup --help
    ```

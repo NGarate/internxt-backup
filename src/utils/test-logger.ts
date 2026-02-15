@@ -12,9 +12,9 @@ export { Verbosity };
 const colors = {
   blue: '\x1b[34m',
   green: '\x1b[32m',
-  yellow: '\x1b[33m', 
+  yellow: '\x1b[33m',
   red: '\x1b[31m',
-  reset: '\x1b[0m'
+  reset: '\x1b[0m',
 };
 
 // Set to track recent messages to avoid duplicates
@@ -29,7 +29,7 @@ function clearOldMessages(): void {
   if (recentMessages.size > MAX_RECENT_MESSAGES) {
     recentMessages.clear();
   }
-  
+
   setTimeout(() => {
     recentMessages.clear();
   }, DUPLICATE_TIMEOUT);
@@ -39,23 +39,23 @@ function clearOldMessages(): void {
  * Log a message with the specified verbosity level
  */
 export function log(
-  message: string, 
-  level: LogLevel, 
-  currentVerbosity: number, 
-  allowDuplicates: boolean = true
+  message: string,
+  level: LogLevel,
+  currentVerbosity: number,
+  allowDuplicates: boolean = true,
 ): void {
   if (currentVerbosity >= level) {
     // Skip duplicate messages if not allowed
     if (!allowDuplicates && recentMessages.has(message)) {
       return;
     }
-    
+
     // Add to message tracker and console
     if (!message.endsWith('\n')) {
       message += '\n';
     }
     console.log(message);
-    
+
     // Track message to prevent duplicates if needed
     if (!allowDuplicates) {
       recentMessages.add(message);
@@ -69,7 +69,9 @@ export function log(
  */
 export function error(message: string): void {
   const formattedMessage = `❌ ${message}`;
-  const output = formattedMessage.endsWith('\n') ? formattedMessage : formattedMessage + '\n';
+  const output = formattedMessage.endsWith('\n')
+    ? formattedMessage
+    : formattedMessage + '\n';
   console.error(`${colors.red}${output}${colors.reset}`);
 }
 
@@ -78,7 +80,12 @@ export function error(message: string): void {
  */
 export function warning(message: string, currentVerbosity: number): void {
   const formattedMessage = `⚠️ ${message}`;
-  log(`${colors.yellow}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, false);
+  log(
+    `${colors.yellow}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    false,
+  );
 }
 
 /**
@@ -86,7 +93,12 @@ export function warning(message: string, currentVerbosity: number): void {
  */
 export function info(message: string, currentVerbosity: number): void {
   const formattedMessage = `ℹ️  ${message}`;
-  log(`${colors.blue}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, false);
+  log(
+    `${colors.blue}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    false,
+  );
 }
 
 /**
@@ -94,7 +106,12 @@ export function info(message: string, currentVerbosity: number): void {
  */
 export function success(message: string, currentVerbosity: number): void {
   const formattedMessage = `✅ ${message}`;
-  log(`${colors.green}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, true);
+  log(
+    `${colors.green}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    true,
+  );
 }
 
 /**
@@ -110,4 +127,4 @@ export function verbose(message: string, currentVerbosity: number): void {
 export function always(message: string): void {
   const output = message.endsWith('\n') ? message : message + '\n';
   console.log(output);
-} 
+}

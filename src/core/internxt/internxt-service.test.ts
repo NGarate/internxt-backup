@@ -18,7 +18,9 @@ describe('InternxtService', () => {
     });
 
     it('should initialize with custom verbosity', () => {
-      const verboseService = new InternxtService({ verbosity: Verbosity.Verbose });
+      const verboseService = new InternxtService({
+        verbosity: Verbosity.Verbose,
+      });
       expect(verboseService).toBeDefined();
     });
 

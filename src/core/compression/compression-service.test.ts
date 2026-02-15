@@ -5,7 +5,7 @@
 import { expect, describe, beforeEach, afterEach, it } from 'bun:test';
 import { CompressionService } from './compression-service';
 import { Verbosity } from '../../interfaces/logger';
-import { writeFile, unlink, mkdir, rmdir } from 'node:fs/promises';
+import { writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,7 +29,7 @@ describe('CompressionService', () => {
       if (existsSync(tempDir)) {
         await rmdir(tempDir, { recursive: true });
       }
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });
@@ -41,7 +41,9 @@ describe('CompressionService', () => {
     });
 
     it('should initialize with custom verbosity', () => {
-      const verboseService = new CompressionService({ verbosity: Verbosity.Verbose });
+      const verboseService = new CompressionService({
+        verbosity: Verbosity.Verbose,
+      });
       expect(verboseService).toBeDefined();
     });
 
@@ -177,7 +179,9 @@ describe('CompressionService', () => {
     it('should return original path when compression increases size', async () => {
       const testFile = join(tempDir, 'test.txt');
       // Create already compressed-like content
-      const content = Buffer.from(Array.from({ length: 1000 }, () => Math.floor(Math.random() * 256)));
+      const content = Buffer.from(
+        Array.from({ length: 1000 }, () => Math.floor(Math.random() * 256)),
+      );
       await writeFile(testFile, content);
 
       const result = await service.compressForUpload(testFile);

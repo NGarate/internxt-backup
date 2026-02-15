@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  # Trigger when semantic-release workflow completes
+  # This works around the limitation where GITHUB_TOKEN events don't trigger workflows
+  workflow_run:
+    workflows: ['Semantic Release']
+    types:
+      - completed
+  # Keep push trigger as fallback for manual tag pushes (e.g., with PAT)
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Determine the release tag to build
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.get-tag.outputs.tag }}
+      should_build: ${{ steps.get-tag.outputs.should_build }}
+    steps:
+      - name: Determine release tag
+        id: get-tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Handle push event (tag was manually pushed)
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Handle workflow_run event (triggered by semantic-release)
+          # Only proceed if the triggering workflow was successful
+          if [[ "$WORKFLOW_CONCLUSION" != "success" ]]; then
+            echo "Semantic release workflow did not succeed, skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get the latest release to find the tag (with retry logic)
+          # Configuration
+          MAX_RETRIES=3
+          RETRY_DELAY=5
+          MAX_RELEASE_AGE_SECONDS=600  # 10 minutes
+
+          # Get the latest release with retry logic
+          LATEST_RELEASE=""
+          API_SUCCESS=false
+          for i in $(seq 1 $MAX_RETRIES); do
+            if LATEST_RELEASE=$(gh api repos/"$REPOSITORY"/releases/latest 2>&1); then
+              API_SUCCESS=true
+              break
+            fi
+            echo "Attempt $i failed, waiting ${RETRY_DELAY}s before retry..."
+            sleep $RETRY_DELAY
+            RETRY_DELAY=$((RETRY_DELAY * 2))
+          done
+
+          if [[ "$API_SUCCESS" != "true" ]]; then
+            echo "ERROR: Failed to fetch release from GitHub API after $MAX_RETRIES attempts"
+            echo "Last response: $LATEST_RELEASE"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ -z "$LATEST_RELEASE" ]] || [[ "$LATEST_RELEASE" == "" ]]; then
+            echo "No release found, skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Validate that we got valid JSON
+          if ! echo "$LATEST_RELEASE" | jq -e . > /dev/null 2>&1; then
+            echo "ERROR: API response is not valid JSON"
+            echo "Response: $LATEST_RELEASE"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+          CREATED_AT=$(echo "$LATEST_RELEASE" | jq -r '.created_at')
+
+          # Check if the release was created within the last 10 minutes (to avoid rebuilding old releases)
+          RELEASE_TIME=$(date -d "$CREATED_AT" +%s)
+          NOW=$(date +%s)
+          AGE=$((NOW - RELEASE_TIME))
+
+          if [[ $AGE -gt $MAX_RELEASE_AGE_SECONDS ]]; then
+            echo "Latest release is older than $MAX_RELEASE_AGE_SECONDS seconds ($AGE seconds), skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Found recent release: $TAG (created $AGE seconds ago)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "should_build=true" >> $GITHUB_OUTPUT
+
+  build-and-release:
+    name: Build and Release
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            artifact: internxt-backup-linux-x64
+            platform_name: Linux x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            artifact: internxt-backup-linux-arm64
+            platform_name: Linux ARM64
+          - os: macos-latest
+            target: bun-darwin-x64
+            artifact: internxt-backup-macos-x64
+            platform_name: macOS x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+            artifact: internxt-backup-macos-arm64
+            platform_name: macOS ARM64 (Apple Silicon)
+          - os: ubuntu-latest
+            target: bun-linux-x64-musl
+            artifact: internxt-backup-linux-x64-musl
+            platform_name: Linux x64 (musl/Alpine)
+          - os: ubuntu-latest
+            target: bun-linux-arm64-musl
+            artifact: internxt-backup-linux-arm64-musl
+            platform_name: Linux ARM64 (musl/Alpine)
+          - os: windows-latest
+            target: bun-windows-x64
+            artifact: internxt-backup-windows-x64.exe
+            platform_name: Windows x64
+          # Note: Windows ARM64 is not yet supported by Bun
+          # - os: windows-latest
+          #   target: bun-windows-arm64
+          #   artifact: internxt-backup-windows-arm64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.1.2
+        with:
+          bun-version: '1.3.8'
+
+      - name: Cache dependencies
+        uses: actions/cache@v5.0.3
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ matrix.target }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build executable
+        run: bun build --compile --target ${{ matrix.target }} --outfile ./dist/${{ matrix.artifact }} ./index.ts
+
+      - name: Create archive
+        shell: bash
+        run: |
+          mkdir -p ./release
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp ./dist/${{ matrix.artifact }} ./release/
+            cd ./release
+            7z a -tzip ${{ matrix.artifact }}.zip ${{ matrix.artifact }}
+          else
+            cp ./dist/${{ matrix.artifact }} ./release/
+            cd ./release
+            chmod +x ${{ matrix.artifact }}
+            tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
+          fi
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: ./release/${{ matrix.artifact }}.*
+          name: Release ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-release-notes:
+    name: Update Release Notes
+    runs-on: ubuntu-latest
+    needs: [prepare, build-and-release]
+    if: needs.prepare.outputs.should_build == 'true'
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.1.2
+        with:
+          bun-version: '1.3.8'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Get CHANGELOG entry
+        id: changelog
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          VERSION=$RELEASE_TAG
+          VERSION=${VERSION#v}  # Remove 'v' prefix to match changelog format (e.g., v1.0.0 -> 1.0.0)
+          # Extract changelog entry for this version
+          CHANGELOG=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | head -n -1)
+          if [[ -z "$CHANGELOG" ]]; then
+            echo "Warning: No changelog entry found for version $VERSION"
+            CHANGELOG="No changelog entry found for this version."
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update release notes
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          body: |
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ## Installation
+
+            Download the appropriate binary for your platform from the assets below.
+
+            ### Linux/macOS
+            ```bash
+            # Download and extract
+            curl -L -o internxt-backup.tar.gz https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.tag }}/internxt-backup-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/')-$(uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/').tar.gz
+            tar -xzf internxt-backup.tar.gz
+            chmod +x internxt-backup-*
+            ./internxt-backup-* --help
+            ```
+
+            ### Windows
+            Download the `.exe` file and run it directly.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

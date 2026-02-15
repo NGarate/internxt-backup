@@ -12,9 +12,9 @@ export { Verbosity };
 const colors = {
   blue: '\x1b[34m',
   green: '\x1b[32m',
-  yellow: '\x1b[33m', 
+  yellow: '\x1b[33m',
   red: '\x1b[31m',
-  reset: '\x1b[0m'
+  reset: '\x1b[0m',
 };
 
 // Set to track recent messages to avoid duplicates
@@ -29,19 +29,10 @@ function clearOldMessages(): void {
   if (recentMessages.size > MAX_RECENT_MESSAGES) {
     recentMessages.clear();
   }
-  
+
   setTimeout(() => {
     recentMessages.clear();
   }, DUPLICATE_TIMEOUT);
-}
-
-/**
- * Ensure a message ends with a newline
- * @param {string} message - The message to check
- * @returns {string} The message with a guaranteed newline at the end
- */
-function ensureNewline(message: string): string {
-  return message.endsWith('\n') ? message : message + '\n';
 }
 
 /**
@@ -55,7 +46,7 @@ export function log(
   message: string,
   level: LogLevel,
   currentVerbosity: number,
-  allowDuplicates: boolean = true
+  allowDuplicates: boolean = true,
 ): void {
   if (currentVerbosity >= level) {
     // Skip duplicate messages if not allowed
@@ -63,10 +54,8 @@ export function log(
       return;
     }
 
-    // Always ensure message ends with a newline
-    const formattedMessage = ensureNewline(message);
+    const formattedMessage = message.endsWith('\n') ? message : message + '\n';
 
-    // Write to stdout
     process.stdout.write(formattedMessage);
 
     // Track message to prevent duplicates if needed
@@ -81,9 +70,9 @@ export function log(
  * Log an error message (always shown regardless of verbosity)
  * @param {string} message - The error message
  */
-export function error (message: string): void {
+export function error(message: string): void {
   const formattedMessage = `❌ ${message}`;
-  process.stderr.write(ensureNewline(`${colors.red}${formattedMessage}${colors.reset}`));
+  process.stderr.write(`${colors.red}${formattedMessage}${colors.reset}\n`);
 }
 
 /**
@@ -93,8 +82,13 @@ export function error (message: string): void {
  */
 export const warning: LogFunction = (message, currentVerbosity) => {
   const formattedMessage = `⚠️ ${message}`;
-  log(`${colors.yellow}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, false);
-}
+  log(
+    `${colors.yellow}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    false,
+  );
+};
 
 /**
  * Log an info message
@@ -103,8 +97,13 @@ export const warning: LogFunction = (message, currentVerbosity) => {
  */
 export const info: LogFunction = (message, currentVerbosity) => {
   const formattedMessage = `ℹ️  ${message}`;
-  log(`${colors.blue}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, false);
-}
+  log(
+    `${colors.blue}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    false,
+  );
+};
 
 /**
  * Log a success message
@@ -113,8 +112,13 @@ export const info: LogFunction = (message, currentVerbosity) => {
  */
 export const success: LogFunction = (message, currentVerbosity) => {
   const formattedMessage = `✅ ${message}`;
-  log(`${colors.green}${formattedMessage}${colors.reset}`, Verbosity.Normal, currentVerbosity, true);
-}
+  log(
+    `${colors.green}${formattedMessage}${colors.reset}`,
+    Verbosity.Normal,
+    currentVerbosity,
+    true,
+  );
+};
 
 /**
  * Log a verbose message (only shown in verbose mode)
@@ -123,12 +127,13 @@ export const success: LogFunction = (message, currentVerbosity) => {
  */
 export const verbose: LogFunction = (message, currentVerbosity) => {
   log(message, Verbosity.Verbose, currentVerbosity, true);
-}
+};
 
 /**
  * Log a message that should always be shown regardless of verbosity
  * @param {string} message - The message to show
  */
 export function always(message: string): void {
-  process.stdout.write(ensureNewline(message));
-} 
+  const formattedMessage = message.endsWith('\n') ? message : message + '\n';
+  process.stdout.write(formattedMessage);
+}

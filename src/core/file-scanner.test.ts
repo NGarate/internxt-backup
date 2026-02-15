@@ -32,52 +32,72 @@ describe('FileScanner', () => {
 
   beforeEach(() => {
     // Mock fs functions at the lowest level
-    fsStatSyncSpy = spyOn(fs, 'statSync').mockImplementation(() => ({ size: 1024 }));
+    fsStatSyncSpy = spyOn(fs, 'statSync').mockImplementation(() => ({
+      size: 1024,
+    }));
     fsReaddirSyncSpy = spyOn(fs, 'readdirSync').mockImplementation(() => [
-      { name: 'file1.txt', isDirectory: () => false, isFile: () => true }
+      { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
     ]);
     fsExistsSyncSpy = spyOn(fs, 'existsSync').mockImplementation(() => true);
-    
-    // Mock createReadStream to simulate file reading for both calculateChecksum and HashCache
-    fsCreateReadStreamSpy = spyOn(fs, 'createReadStream').mockImplementation(() => {
-      const mockStream = {
-        on: (event: string, callback: (data?: Buffer) => void) => {
-          if (event === 'data') {
-            callback(Buffer.from('mock file content'));
-          }
-          if (event === 'end') {
-            callback();
-          }
-          return mockStream;
-        }
-      };
-      return mockStream;
-    });
 
-    fsPromisesReadFileSpy = spyOn(fs.promises, 'readFile').mockImplementation(() => 
-      Promise.resolve('{"files": {}, "lastRun": ""}')
+    // Mock createReadStream to simulate file reading for both calculateChecksum and HashCache
+    fsCreateReadStreamSpy = spyOn(fs, 'createReadStream').mockImplementation(
+      () => {
+        const mockStream = {
+          on: (event: string, callback: (data?: Buffer) => void) => {
+            if (event === 'data') {
+              callback(Buffer.from('mock file content'));
+            }
+            if (event === 'end') {
+              callback();
+            }
+            return mockStream;
+          },
+        };
+        return mockStream;
+      },
     );
-    fsPromisesWriteFileSpy = spyOn(fs.promises, 'writeFile').mockImplementation(() => Promise.resolve());
+
+    fsPromisesReadFileSpy = spyOn(fs.promises, 'readFile').mockImplementation(
+      () => Promise.resolve('{"files": {}, "lastRun": ""}'),
+    );
+    fsPromisesWriteFileSpy = spyOn(fs.promises, 'writeFile').mockImplementation(
+      () => Promise.resolve(),
+    );
 
     // Mock crypto for checksum calculation
     cryptoCreateHashSpy = spyOn(crypto, 'createHash').mockImplementation(() => {
       return {
-        update: function(this: crypto.Hash, _data: string | Buffer) { return this; },
-        digest: () => 'mock-checksum-hash'
+        update: function (this: crypto.Hash, _data: string | Buffer) {
+          return this;
+        },
+        digest: () => 'mock-checksum-hash',
       };
     });
 
     // Mock fs-utils functions directly
-    calculateChecksumSpy = spyOn(fsUtils, 'calculateChecksum').mockImplementation(() => Promise.resolve('mock-checksum'));
-    loadJsonFromFileSpy = spyOn(fsUtils, 'loadJsonFromFile').mockImplementation(() => 
-      Promise.resolve({ files: {}, lastRun: '' })
+    calculateChecksumSpy = spyOn(
+      fsUtils,
+      'calculateChecksum',
+    ).mockImplementation(() => Promise.resolve('mock-checksum'));
+    loadJsonFromFileSpy = spyOn(fsUtils, 'loadJsonFromFile').mockImplementation(
+      () => Promise.resolve({ files: {}, lastRun: '' }),
     );
-    saveJsonToFileSpy = spyOn(fsUtils, 'saveJsonToFile').mockImplementation(() => Promise.resolve(true));
+    saveJsonToFileSpy = spyOn(fsUtils, 'saveJsonToFile').mockImplementation(
+      () => Promise.resolve(true),
+    );
 
     // Mock HashCache methods to avoid actual file operations
-    hashCacheCalculateHashSpy = spyOn(HashCache.prototype, 'calculateHash').mockImplementation(() => Promise.resolve('cached-checksum'));
-    spyOn(HashCache.prototype, 'load').mockImplementation(() => Promise.resolve(true));
-    spyOn(HashCache.prototype, 'save').mockImplementation(() => Promise.resolve(true));
+    hashCacheCalculateHashSpy = spyOn(
+      HashCache.prototype,
+      'calculateHash',
+    ).mockImplementation(() => Promise.resolve('cached-checksum'));
+    spyOn(HashCache.prototype, 'load').mockImplementation(() =>
+      Promise.resolve(true),
+    );
+    spyOn(HashCache.prototype, 'save').mockImplementation(() =>
+      Promise.resolve(true),
+    );
 
     // Mock logger functions
     loggerVerboseSpy = spyOn(logger, 'verbose').mockImplementation(() => {});
@@ -122,8 +142,11 @@ describe('FileScanner', () => {
 
   describe('loadState', () => {
     it('should load state from file', async () => {
-      loadJsonFromFileSpy.mockImplementation(() => 
-        Promise.resolve({ files: { 'test.txt': 'abc123' }, lastRun: '2021-01-01' })
+      loadJsonFromFileSpy.mockImplementation(() =>
+        Promise.resolve({
+          files: { 'test.txt': 'abc123' },
+          lastRun: '2021-01-01',
+        }),
       );
 
       const scanner = new FileScanner('/test/dir');
@@ -133,8 +156,8 @@ describe('FileScanner', () => {
     });
 
     it('should handle empty state file', async () => {
-      loadJsonFromFileSpy.mockImplementation(() => 
-        Promise.resolve({ files: {}, lastRun: '' })
+      loadJsonFromFileSpy.mockImplementation(() =>
+        Promise.resolve({ files: {}, lastRun: '' }),
       );
 
       const scanner = new FileScanner('/test/dir');
@@ -182,7 +205,7 @@ describe('FileScanner', () => {
           return [
             { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
             { name: 'subdir', isDirectory: () => true, isFile: () => false },
-            { name: '.hidden', isDirectory: () => false, isFile: () => true }
+            { name: '.hidden', isDirectory: () => false, isFile: () => true },
           ];
         } else {
           // Subsequent calls - subdirectories return empty
@@ -214,7 +237,7 @@ describe('FileScanner', () => {
     it('should skip hidden files', async () => {
       fsReaddirSyncSpy.mockImplementation(() => [
         { name: '.hidden', isDirectory: () => false, isFile: () => true },
-        { name: 'visible.txt', isDirectory: () => false, isFile: () => true }
+        { name: 'visible.txt', isDirectory: () => false, isFile: () => true },
       ]);
 
       const scanner = new FileScanner('/test/dir');
@@ -247,15 +270,15 @@ describe('FileScanner', () => {
           absolutePath: '/test/dir/unchanged.txt',
           size: 1024,
           checksum: 'same-checksum',
-          hasChanged: null
+          hasChanged: null,
         },
         {
           relativePath: 'changed.txt',
           absolutePath: '/test/dir/changed.txt',
           size: 2048,
           checksum: 'new-checksum',
-          hasChanged: null
-        }
+          hasChanged: null,
+        },
       ];
 
       const filesToUpload = await scanner.determineFilesToUpload(allFiles);
@@ -273,15 +296,15 @@ describe('FileScanner', () => {
           absolutePath: '/test/dir/file1.txt',
           size: 1024,
           checksum: 'checksum1',
-          hasChanged: null
+          hasChanged: null,
         },
         {
           relativePath: 'file2.txt',
           absolutePath: '/test/dir/file2.txt',
           size: 2048,
           checksum: 'checksum2',
-          hasChanged: null
-        }
+          hasChanged: null,
+        },
       ];
 
       const filesToUpload = await scanner.determineFilesToUpload(allFiles);
@@ -295,8 +318,14 @@ describe('FileScanner', () => {
       const scanner = new FileScanner('/test/dir');
 
       // Pre-populate the hash cache with matching checksums
-      scanner['hashCache']['cache'].set(path.normalize('/test/dir/file1.txt'), 'cached-checksum');
-      scanner['hashCache']['cache'].set(path.normalize('/test/dir/file2.txt'), 'cached-checksum');
+      scanner['hashCache']['cache'].set(
+        path.normalize('/test/dir/file1.txt'),
+        'cached-checksum',
+      );
+      scanner['hashCache']['cache'].set(
+        path.normalize('/test/dir/file2.txt'),
+        'cached-checksum',
+      );
 
       const allFiles = [
         {
@@ -304,15 +333,15 @@ describe('FileScanner', () => {
           absolutePath: '/test/dir/file1.txt',
           size: 1024,
           checksum: 'cached-checksum',
-          hasChanged: null
+          hasChanged: null,
         },
         {
           relativePath: 'file2.txt',
           absolutePath: '/test/dir/file2.txt',
           size: 2048,
           checksum: 'cached-checksum',
-          hasChanged: null
-        }
+          hasChanged: null,
+        },
       ];
 
       const filesToUpload = await scanner.determineFilesToUpload(allFiles);
@@ -323,10 +352,12 @@ describe('FileScanner', () => {
 
   describe('scan', () => {
     it('should perform a complete scan process', async () => {
-      loadJsonFromFileSpy.mockImplementation(() => Promise.resolve({
-        files: { 'unchanged.txt': 'same-checksum' },
-        lastRun: '2023-01-01T00:00:00.000Z'
-      }));
+      loadJsonFromFileSpy.mockImplementation(() =>
+        Promise.resolve({
+          files: { 'unchanged.txt': 'same-checksum' },
+          lastRun: '2023-01-01T00:00:00.000Z',
+        }),
+      );
 
       const scanner = new FileScanner('/test/dir');
 
@@ -335,11 +366,13 @@ describe('FileScanner', () => {
           relativePath: 'file1.txt',
           absolutePath: '/test/dir/file1.txt',
           size: 1024,
-          checksum: 'checksum1'
-        }
+          checksum: 'checksum1',
+        },
       ];
 
-      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(() => Promise.resolve(testFiles));
+      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(
+        () => Promise.resolve(testFiles),
+      );
 
       const result = await scanner.scan();
 
@@ -352,25 +385,29 @@ describe('FileScanner', () => {
     });
 
     it('should calculate total size correctly', async () => {
-      loadJsonFromFileSpy.mockImplementation(() => Promise.resolve({ files: {}, lastRun: '' }));
+      loadJsonFromFileSpy.mockImplementation(() =>
+        Promise.resolve({ files: {}, lastRun: '' }),
+      );
 
       const testFiles = [
         {
           relativePath: 'file1.txt',
           absolutePath: '/test/dir/file1.txt',
           size: 1024 * 1024,
-          checksum: 'checksum1'
+          checksum: 'checksum1',
         },
         {
           relativePath: 'file2.txt',
           absolutePath: '/test/dir/file2.txt',
           size: 2 * 1024 * 1024,
-          checksum: 'checksum2'
-        }
+          checksum: 'checksum2',
+        },
       ];
 
       const scanner = new FileScanner('/test/dir', 1, true);
-      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(() => Promise.resolve(testFiles));
+      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(
+        () => Promise.resolve(testFiles),
+      );
 
       const result = await scanner.scan();
 
@@ -387,6 +424,57 @@ describe('FileScanner', () => {
       scanner.recordCompletion();
 
       expect(scanner).toBeDefined();
+    });
+  });
+
+  describe('Hash cache regression — prevent re-uploading unchanged files', () => {
+    it('should load hash cache during scan before checking changes', async () => {
+      const scanner = new FileScanner('/test/dir');
+
+      // Track call order using instance-level spies to avoid prototype pollution
+      const callOrder: string[] = [];
+      const hashCache = (scanner as any).hashCache as InstanceType<
+        typeof HashCache
+      >;
+
+      const instanceLoadSpy = spyOn(hashCache, 'load').mockImplementation(
+        () => {
+          callOrder.push('load');
+          return Promise.resolve(true);
+        },
+      );
+      const instanceHasChangedSpy = spyOn(
+        hashCache,
+        'hasChanged',
+      ).mockImplementation(() => {
+        callOrder.push('hasChanged');
+        return Promise.resolve(false);
+      });
+
+      const scanDirSpy = spyOn(scanner, 'scanDirectory').mockImplementation(
+        () =>
+          Promise.resolve([
+            {
+              relativePath: 'file1.txt',
+              absolutePath: '/test/dir/file1.txt',
+              size: 1024,
+              checksum: 'abc123',
+              hasChanged: null,
+            },
+          ]),
+      );
+
+      await scanner.scan();
+
+      // load must come before any hasChanged call
+      const loadIndex = callOrder.indexOf('load');
+      const hasChangedIndex = callOrder.indexOf('hasChanged');
+      expect(loadIndex).toBeGreaterThanOrEqual(0);
+      expect(hasChangedIndex).toBeGreaterThan(loadIndex);
+
+      scanDirSpy.mockRestore();
+      instanceLoadSpy.mockRestore();
+      instanceHasChangedSpy.mockRestore();
     });
   });
 });
