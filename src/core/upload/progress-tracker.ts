@@ -139,6 +139,7 @@ export function createProgressTracker(
 
   const startProgressUpdates = (intervalMs = 250) => {
     stopProgressUpdates();
+    setupOutputInterception();
     isTrackingActive = true;
     originalStdoutWrite.call(process.stdout, '\n');
     updateInterval = setInterval(() => displayProgress(), intervalMs);
