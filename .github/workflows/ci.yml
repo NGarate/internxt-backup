@@ -189,6 +189,13 @@ jobs:
             exit 0
           fi
 
+          # Skip execution test for musl binaries on glibc runners
+          if [[ "${{ matrix.target }}" == *"musl"* ]]; then
+            echo "Skipping execution test for musl binary on glibc runner"
+            exit 0
+          fi
+
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Test Windows executable - these should succeed
             ./dist/${{ matrix.artifact }} --version
