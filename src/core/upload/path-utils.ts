@@ -13,13 +13,20 @@ export function normalizePathInfo(
   const lastSlashIndex = normalizedPath.lastIndexOf('/');
   const directory =
     lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
-  const targetPath = targetDir
-    ? `${targetDir}/${normalizedPath}`
+
+  // Normalize targetDir: replace backslashes, remove trailing slash unless it's root '/'
+  const normalizedTargetDir = targetDir
+    ? targetDir.replace(/\\/g, '/').replace(/\/$/, '') || '/'
+    : '';
+
+  const targetPath = normalizedTargetDir
+    ? `${normalizedTargetDir}/${normalizedPath}`
     : normalizedPath;
   const fullDirectoryPath = directory
-    ? targetDir
-      ? `${targetDir}/${directory}`
+    ? normalizedTargetDir
+      ? `${normalizedTargetDir}/${directory}`
       : directory
-    : targetDir;
+    : normalizedTargetDir;
+
   return { normalizedPath, directory, targetPath, fullDirectoryPath };
 }
