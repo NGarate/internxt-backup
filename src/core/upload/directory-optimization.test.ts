@@ -8,6 +8,7 @@
 import { expect, describe, beforeEach, mock, it } from 'bun:test';
 import { createUploader } from './uploader';
 import { Verbosity } from '../../interfaces/logger';
+import { FileInfo } from '../../interfaces/file-scanner';
 import {
   createMockInternxtService,
   createMockFileInfo,
@@ -59,7 +60,6 @@ describe('Directory Creation Optimization', () => {
   });
 
   it('should pre-create all necessary directories before uploading files', async () => {
-    makeUploader();
     const files = [
       createMockFileInfo('source/dir1/file1.txt'),
       createMockFileInfo('source/dir2/file2.txt'),
@@ -98,7 +98,7 @@ describe('Directory Creation Optimization', () => {
   });
 
   it('should efficiently handle a large number of files in deep directory structures', async () => {
-    const files = [];
+    const files: FileInfo[] = [];
     const dirStructure = [
       'dir1',
       'dir2',
