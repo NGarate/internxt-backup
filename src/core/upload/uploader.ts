@@ -166,7 +166,7 @@ export function createUploader(
           success: resumeResult.success,
           filePath: uploadPath,
           remotePath: finalRemotePath,
-          output: resumeResult.error,
+          error: resumeResult.error,
         };
       } else {
         result = await internxtService.uploadFile(uploadPath, finalRemotePath);
