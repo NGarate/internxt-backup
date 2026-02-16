@@ -13,21 +13,17 @@ describe('Logger Utilities', () => {
   let stderrOutput: string[];
 
   beforeEach(() => {
-    // Save original write methods
     originalStdoutWrite = process.stdout.write;
     originalStderrWrite = process.stderr.write;
 
-    // Initialize output tracking arrays
     stdoutOutput = [];
     stderrOutput = [];
 
-    // Mock process.stdout.write
     process.stdout.write = function (chunk: any, ..._args: any[]): boolean {
       stdoutOutput.push(String(chunk));
       return true;
     } as typeof process.stdout.write;
 
-    // Mock process.stderr.write
     process.stderr.write = function (chunk: any, ..._args: any[]): boolean {
       stderrOutput.push(String(chunk));
       return true;
@@ -35,7 +31,6 @@ describe('Logger Utilities', () => {
   });
 
   afterEach(() => {
-    // Restore original write methods
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
   });
@@ -48,170 +43,147 @@ describe('Logger Utilities', () => {
     });
   });
 
+  describe('Color helpers', () => {
+    it('should wrap text with red ANSI codes', () => {
+      const result = logger.red('error');
+      expect(result).toContain('error');
+      expect(result).toContain('\x1b[31m');
+      expect(result).toContain('\x1b[0m');
+    });
+
+    it('should wrap text with green ANSI codes', () => {
+      const result = logger.green('success');
+      expect(result).toContain('success');
+      expect(result).toContain('\x1b[32m');
+      expect(result).toContain('\x1b[0m');
+    });
+
+    it('should wrap text with yellow ANSI codes', () => {
+      const result = logger.yellow('warning');
+      expect(result).toContain('warning');
+      expect(result).toContain('\x1b[33m');
+      expect(result).toContain('\x1b[0m');
+    });
+
+    it('should wrap text with blue ANSI codes', () => {
+      const result = logger.blue('info');
+      expect(result).toContain('info');
+      expect(result).toContain('\x1b[34m');
+      expect(result).toContain('\x1b[0m');
+    });
+
+    it('should wrap text with bold ANSI codes', () => {
+      const result = logger.bold('bold text');
+      expect(result).toContain('bold text');
+      expect(result).toContain('\x1b[1m');
+      expect(result).toContain('\x1b[0m');
+    });
+  });
+
   describe('log', () => {
     it('should log message when level is less than or equal to current verbosity', () => {
-      const message = 'Test message';
-      const messageLevel = Verbosity.Normal;
-      const currentVerbosity = Verbosity.Normal;
+      logger.log('Test message', Verbosity.Normal, Verbosity.Normal);
 
-      logger.log(message, messageLevel, currentVerbosity);
-
-      // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Test message')),
+      ).toBe(true);
     });
 
     it('should not log message when level is greater than current verbosity', () => {
-      const message = 'Test message';
-      const messageLevel = Verbosity.Verbose;
-      const currentVerbosity = Verbosity.Normal;
+      logger.log('Test message', Verbosity.Verbose, Verbosity.Normal);
 
-      logger.log(message, messageLevel, currentVerbosity);
-
-      // Check that no output was written
       expect(stdoutOutput.length).toBe(0);
     });
   });
 
   describe('error', () => {
-    it('should log error message to stderr', () => {
-      const message = 'Error message';
+    it('should log error message to stdout', () => {
+      logger.error('Error message');
 
-      logger.error(message);
-
-      // Check that error was written to stderr
-      expect(stderrOutput.length).toBeGreaterThan(0);
-      expect(stderrOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(
+        stdoutOutput.some((output) => output.includes('Error message')),
+      ).toBe(true);
     });
   });
 
   describe('warning', () => {
     it('should log warning message when verbosity is Normal', () => {
-      const message = 'Warning message';
-      const currentVerbosity = Verbosity.Normal;
+      logger.warning('Warning message', Verbosity.Normal);
 
-      logger.warning(message, currentVerbosity);
-
-      // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Warning message')),
+      ).toBe(true);
     });
 
     it('should not log warning message when verbosity is Quiet', () => {
-      const message = 'Warning message';
-      const currentVerbosity = Verbosity.Quiet;
+      logger.warning('Warning message', Verbosity.Quiet);
 
-      logger.warning(message, currentVerbosity);
-
-      // Check that no output was written
       expect(stdoutOutput.length).toBe(0);
     });
   });
 
   describe('info', () => {
     it('should log info message when verbosity is Normal', () => {
-      const message = 'Info message';
-      const currentVerbosity = Verbosity.Normal;
+      logger.info('Info message', Verbosity.Normal);
 
-      logger.info(message, currentVerbosity);
-
-      // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Info message')),
+      ).toBe(true);
     });
 
     it('should not log info message when verbosity is Quiet', () => {
-      const message = 'Info message';
-      const currentVerbosity = Verbosity.Quiet;
+      logger.info('Info message', Verbosity.Quiet);
 
-      logger.info(message, currentVerbosity);
-
-      // Check that no output was written
       expect(stdoutOutput.length).toBe(0);
     });
   });
 
   describe('success', () => {
     it('should log success message when verbosity is Normal', () => {
-      const message = 'Success message';
-      const currentVerbosity = Verbosity.Normal;
+      logger.success('Success message', Verbosity.Normal);
 
-      logger.success(message, currentVerbosity);
-
-      // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Success message')),
+      ).toBe(true);
     });
 
     it('should not log success message when verbosity is Quiet', () => {
-      const message = 'Success message';
-      const currentVerbosity = Verbosity.Quiet;
+      logger.success('Success message', Verbosity.Quiet);
 
-      logger.success(message, currentVerbosity);
-
-      // Check that no output was written
       expect(stdoutOutput.length).toBe(0);
     });
   });
 
   describe('verbose', () => {
     it('should log verbose message when verbosity is Verbose', () => {
-      const message = 'Verbose message';
-      const currentVerbosity = Verbosity.Verbose;
+      logger.verbose('Verbose message', Verbosity.Verbose);
 
-      logger.verbose(message, currentVerbosity);
-
-      // Check that output was written
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Verbose message')),
+      ).toBe(true);
     });
 
     it('should not log verbose message when verbosity is Normal', () => {
-      const message = 'Verbose message';
-      const currentVerbosity = Verbosity.Normal;
+      logger.verbose('Verbose message', Verbosity.Normal);
 
-      logger.verbose(message, currentVerbosity);
-
-      // Check that no output was written
       expect(stdoutOutput.length).toBe(0);
     });
   });
 
   describe('always', () => {
     it('should always log message regardless of verbosity', () => {
-      const message = 'Always message';
+      logger.always('Always message');
 
-      logger.always(message);
-
-      // Check that output was written even with Quiet verbosity
       expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
-    });
-
-    it('should log message with Normal verbosity', () => {
-      const message = 'Always message';
-
-      logger.always(message);
-
-      // Check that output was written
-      expect(stdoutOutput.length).toBeGreaterThan(0);
-      expect(stdoutOutput.some((output) => output.includes(message))).toBe(
-        true,
-      );
+      expect(
+        stdoutOutput.some((output) => output.includes('Always message')),
+      ).toBe(true);
     });
   });
 });

@@ -1,16 +1,16 @@
-/**
- * Internxt File Synchronization Tool
- *
- * Optimized for Bun's runtime for maximum performance
- */
-
+import path from 'path';
+import os from 'os';
 import { getOptimalConcurrency } from './utils/env-utils';
 import * as logger from './utils/logger';
-import FileScanner from './core/file-scanner';
-import Uploader from './core/upload/uploader';
-import { InternxtService } from './core/internxt/internxt-service';
+import { Verbosity } from './interfaces/logger';
+import { createFileScanner } from './core/file-scanner';
+import { createUploader } from './core/upload/uploader';
+import { createInternxtService } from './core/internxt/internxt-service';
+import { createHashCache } from './core/upload/hash-cache';
+import { createProgressTracker } from './core/upload/progress-tracker';
+import { createCompressionService } from './core/compression/compression-service';
+import { createResumableUploader } from './core/upload/resumable-uploader';
 
-// Define options interface for better type checking
 export interface SyncOptions {
   cores?: number;
   target?: string;
@@ -23,27 +23,19 @@ export interface SyncOptions {
   chunkSize?: number;
 }
 
-/**
- * Main synchronization function that can be called from CLI or programmatically
- */
 export async function syncFiles(
   sourceDir: string,
   options: SyncOptions,
 ): Promise<void> {
   try {
-    // Determine verbosity level using the Verbosity enum
-    let verbosity: logger.Verbosity;
-    if (options.quiet) {
-      verbosity = logger.Verbosity.Quiet;
-    } else if (options.verbose) {
-      verbosity = logger.Verbosity.Verbose;
-    } else {
-      verbosity = logger.Verbosity.Normal;
-    }
+    const verbosity = options.quiet
+      ? Verbosity.Quiet
+      : options.verbose
+        ? Verbosity.Verbose
+        : Verbosity.Normal;
 
-    // Check Internxt CLI status
     logger.info('Checking Internxt CLI...', verbosity);
-    const internxtService = new InternxtService({ verbosity });
+    const internxtService = createInternxtService({ verbosity });
     const cliStatus = await internxtService.checkCLI();
 
     if (!cliStatus.installed) {
@@ -62,32 +54,45 @@ export async function syncFiles(
 
     logger.success(`Internxt CLI v${cliStatus.version} ready`, verbosity);
 
-    // Initialize file scanner with force upload option if specified
-    const fileScanner = new FileScanner(sourceDir, verbosity, options.force);
-
-    // Get optimal concurrency
+    const fileScanner = createFileScanner(sourceDir, verbosity, options.force);
     const concurrentUploads = getOptimalConcurrency(options.cores);
 
-    // Create uploader
-    const uploader = new Uploader(
+    const hashCache = createHashCache(
+      path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
+      verbosity,
+    );
+    const progressTracker = createProgressTracker(verbosity);
+
+    const compressionService = options.compress
+      ? createCompressionService({ level: options.compressionLevel, verbosity })
+      : undefined;
+
+    const resumableUploader = options.resume
+      ? createResumableUploader(internxtService, {
+          chunkSize: options.chunkSize
+            ? options.chunkSize * 1024 * 1024
+            : undefined,
+          verbosity,
+        })
+      : undefined;
+
+    const uploader = createUploader(
       concurrentUploads,
       options.target || '/',
       verbosity,
       {
-        compress: options.compress,
-        compressionLevel: options.compressionLevel,
-        resume: options.resume,
-        chunkSize: options.chunkSize,
+        internxtService,
+        hashCache,
+        progressTracker,
+        compressionService,
+        resumableUploader,
       },
     );
 
-    // Link the file scanner to the uploader
     uploader.setFileScanner(fileScanner);
 
-    // Scan the source directory
     const scanResult = await fileScanner.scan();
 
-    // Start the upload process
     if (scanResult.filesToUpload.length === 0) {
       logger.success('All files are up to date. Nothing to upload.', verbosity);
     } else {
@@ -96,6 +101,6 @@ export async function syncFiles(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`Error during file sync: ${errorMessage}`);
-    throw error; // Let the CLI handle the error
+    throw error;
   }
 }

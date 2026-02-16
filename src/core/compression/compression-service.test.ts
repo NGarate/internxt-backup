@@ -1,30 +1,31 @@
 /**
- * Tests for CompressionService
+ * Tests for createCompressionService factory function and shouldCompress pure function
  */
 
 import { expect, describe, beforeEach, afterEach, it } from 'bun:test';
-import { CompressionService } from './compression-service';
+import {
+  createCompressionService,
+  shouldCompress,
+} from './compression-service';
 import { Verbosity } from '../../interfaces/logger';
 import { writeFile, mkdir, rmdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-describe('CompressionService', () => {
-  let service: CompressionService;
+describe('createCompressionService', () => {
+  let service: ReturnType<typeof createCompressionService>;
   let tempDir: string;
 
   beforeEach(async () => {
-    service = new CompressionService({ verbosity: Verbosity.Normal });
+    service = createCompressionService({ verbosity: Verbosity.Normal });
     tempDir = join(tmpdir(), `compression-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
   });
 
   afterEach(async () => {
-    // Cleanup all temp files
     await service.cleanupAll();
 
-    // Cleanup temp directory
     try {
       if (existsSync(tempDir)) {
         await rmdir(tempDir, { recursive: true });
@@ -34,92 +35,84 @@ describe('CompressionService', () => {
     }
   });
 
-  describe('constructor', () => {
-    it('should initialize with default options', () => {
-      const defaultService = new CompressionService();
+  describe('initialization', () => {
+    it('should create with default options', () => {
+      const defaultService = createCompressionService();
       expect(defaultService).toBeDefined();
+      expect(typeof defaultService.compressFile).toBe('function');
     });
 
-    it('should initialize with custom verbosity', () => {
-      const verboseService = new CompressionService({
+    it('should create with custom verbosity', () => {
+      const verboseService = createCompressionService({
         verbosity: Verbosity.Verbose,
       });
       expect(verboseService).toBeDefined();
     });
 
     it('should clamp compression level to minimum 1', () => {
-      const lowService = new CompressionService({ level: 0 });
+      const lowService = createCompressionService({ level: 0 });
       expect(lowService).toBeDefined();
     });
 
     it('should clamp compression level to maximum 9', () => {
-      const highService = new CompressionService({ level: 10 });
+      const highService = createCompressionService({ level: 10 });
       expect(highService).toBeDefined();
     });
   });
 
-  describe('shouldCompress', () => {
+  describe('shouldCompress (pure function)', () => {
     it('should return false for files smaller than 1KB', () => {
-      const result = service.shouldCompress('/path/to/file.txt', 512);
-      expect(result).toBe(false);
+      expect(shouldCompress('/path/to/file.txt', 512)).toBe(false);
     });
 
     it('should return false for already compressed image files', () => {
-      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-
-      for (const ext of imageExtensions) {
-        const result = service.shouldCompress(`/path/to/file${ext}`, 10240);
-        expect(result).toBe(false);
+      for (const ext of ['.jpg', '.jpeg', '.png', '.gif', '.webp']) {
+        expect(shouldCompress(`/path/to/file${ext}`, 10240)).toBe(false);
       }
     });
 
     it('should return false for already compressed video files', () => {
-      const videoExtensions = ['.mp4', '.avi', '.mov', '.webm'];
-
-      for (const ext of videoExtensions) {
-        const result = service.shouldCompress(`/path/to/file${ext}`, 10240);
-        expect(result).toBe(false);
+      for (const ext of ['.mp4', '.avi', '.mov', '.webm']) {
+        expect(shouldCompress(`/path/to/file${ext}`, 10240)).toBe(false);
       }
     });
 
     it('should return false for archive files', () => {
-      const archiveExtensions = ['.zip', '.gz', '.bz2', '.7z', '.rar'];
-
-      for (const ext of archiveExtensions) {
-        const result = service.shouldCompress(`/path/to/file${ext}`, 10240);
-        expect(result).toBe(false);
+      for (const ext of ['.zip', '.gz', '.bz2', '.7z', '.rar']) {
+        expect(shouldCompress(`/path/to/file${ext}`, 10240)).toBe(false);
       }
     });
 
     it('should return false for already compressed documents', () => {
-      const docExtensions = ['.pdf', '.docx', '.xlsx'];
-
-      for (const ext of docExtensions) {
-        const result = service.shouldCompress(`/path/to/file${ext}`, 10240);
-        expect(result).toBe(false);
+      for (const ext of ['.pdf', '.docx', '.xlsx']) {
+        expect(shouldCompress(`/path/to/file${ext}`, 10240)).toBe(false);
       }
     });
 
     it('should return true for compressible text files', () => {
-      const result = service.shouldCompress('/path/to/file.txt', 10240);
-      expect(result).toBe(true);
+      expect(shouldCompress('/path/to/file.txt', 10240)).toBe(true);
     });
 
     it('should return true for compressible log files', () => {
-      const result = service.shouldCompress('/path/to/file.log', 10240);
-      expect(result).toBe(true);
+      expect(shouldCompress('/path/to/file.log', 10240)).toBe(true);
     });
 
     it('should return true for compressible json files', () => {
-      const result = service.shouldCompress('/path/to/file.json', 10240);
-      expect(result).toBe(true);
+      expect(shouldCompress('/path/to/file.json', 10240)).toBe(true);
+    });
+  });
+
+  describe('shouldCompress (instance method)', () => {
+    it('should also be available on the service instance', () => {
+      expect(service.shouldCompress('/path/to/file.txt', 10240)).toBe(true);
+      expect(service.shouldCompress('/path/to/file.jpg', 10240)).toBe(false);
     });
   });
 
   describe('compressFile', () => {
     it('should compress a file successfully', async () => {
       const testFile = join(tempDir, 'test.txt');
-      const content = 'A'.repeat(10000); // Content that compresses well
+      const content = 'A'.repeat(10000);
       await writeFile(testFile, content);
 
       const result = await service.compressFile(testFile);
@@ -151,7 +144,6 @@ describe('CompressionService', () => {
 
     it('should calculate compression ratio correctly', async () => {
       const testFile = join(tempDir, 'test.txt');
-      // Create content with high compressibility
       const content = 'ABCDEFGHIJ'.repeat(1000);
       await writeFile(testFile, content);
 
@@ -159,7 +151,6 @@ describe('CompressionService', () => {
 
       expect(result.success).toBe(true);
       expect(result.ratio).toBeGreaterThan(0);
-      // Should have good compression ratio for repetitive content
       expect(result.ratio).toBeGreaterThan(50);
     });
   });
@@ -178,7 +169,6 @@ describe('CompressionService', () => {
 
     it('should return original path when compression increases size', async () => {
       const testFile = join(tempDir, 'test.txt');
-      // Create already compressed-like content
       const content = Buffer.from(
         Array.from({ length: 1000 }, () => Math.floor(Math.random() * 256)),
       );
@@ -212,22 +202,18 @@ describe('CompressionService', () => {
       const nonTrackedFile = join(tempDir, 'non-tracked.txt');
       await writeFile(nonTrackedFile, 'test');
 
-      // Should not throw
       await service.cleanup(nonTrackedFile);
 
-      // File should still exist (wasn't tracked)
       expect(existsSync(nonTrackedFile)).toBe(true);
     });
 
     it('should handle cleanup of non-existent file gracefully', async () => {
-      // Should not throw
       await service.cleanup('/nonexistent/file.txt');
     });
   });
 
   describe('cleanupAll', () => {
     it('should clean up all tracked temp files', async () => {
-      // Create and compress multiple files
       const files = [];
       for (let i = 0; i < 3; i++) {
         const testFile = join(tempDir, `test${i}.txt`);
@@ -236,35 +222,33 @@ describe('CompressionService', () => {
         files.push(result.compressedPath);
       }
 
-      // Verify all files exist
       for (const file of files) {
         expect(existsSync(file)).toBe(true);
       }
 
-      // Clean up all
       await service.cleanupAll();
 
-      // Verify all files are deleted
       for (const file of files) {
         expect(existsSync(file)).toBe(false);
       }
     });
 
     it('should handle cleanup when no files tracked', async () => {
-      // Should not throw
       await service.cleanupAll();
     });
   });
 
   describe('getCompressedRemotePath', () => {
     it('should append .gz to remote path', () => {
-      const result = service.getCompressedRemotePath('/remote/file.txt');
-      expect(result).toBe('/remote/file.txt.gz');
+      expect(service.getCompressedRemotePath('/remote/file.txt')).toBe(
+        '/remote/file.txt.gz',
+      );
     });
 
     it('should handle paths with special characters', () => {
-      const result = service.getCompressedRemotePath('/remote/file (1).txt');
-      expect(result).toBe('/remote/file (1).txt.gz');
+      expect(service.getCompressedRemotePath('/remote/file (1).txt')).toBe(
+        '/remote/file (1).txt.gz',
+      );
     });
   });
 

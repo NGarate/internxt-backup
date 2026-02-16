@@ -7,7 +7,6 @@
 
 // Re-export all test helpers from the consolidated file
 export * from './mocks/test-helpers';
-export { default as testHelpers } from './mocks/test-helpers';
 
 // Optionally suppress console output during tests
 if (

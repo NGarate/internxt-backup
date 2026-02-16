@@ -1,52 +1,52 @@
 /**
- * Tests for BackupScheduler
+ * Tests for createScheduler factory function
  */
 
 import { expect, describe, it } from 'bun:test';
-import { BackupScheduler, BackupConfig } from './scheduler';
+import { createScheduler, BackupConfig } from './scheduler';
 import { Verbosity } from '../../interfaces/logger';
 
-describe('BackupScheduler', () => {
-  describe('constructor', () => {
-    it('should initialize with default options', () => {
-      const scheduler = new BackupScheduler();
+describe('createScheduler', () => {
+  describe('initialization', () => {
+    it('should create with default options', () => {
+      const scheduler = createScheduler();
       expect(scheduler).toBeDefined();
     });
 
-    it('should initialize with custom verbosity', () => {
-      const scheduler = new BackupScheduler({ verbosity: Verbosity.Verbose });
+    it('should create with custom verbosity', () => {
+      const scheduler = createScheduler({ verbosity: Verbosity.Verbose });
       expect(scheduler).toBeDefined();
     });
   });
 
   describe('interface', () => {
     it('should have startDaemon method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.startDaemon).toBe('function');
     });
 
     it('should have runOnce method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.runOnce).toBe('function');
     });
 
     it('should have stopJob method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.stopJob).toBe('function');
     });
 
     it('should have stopAll method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.stopAll).toBe('function');
     });
 
     it('should have getJobInfo method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.getJobInfo).toBe('function');
     });
 
     it('should have runDelayed method', () => {
-      const scheduler = new BackupScheduler();
+      const scheduler = createScheduler();
       expect(typeof scheduler.runDelayed).toBe('function');
     });
   });

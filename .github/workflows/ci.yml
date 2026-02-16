@@ -195,6 +195,7 @@ jobs:
             exit 0
           fi
 
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Test Windows executable - these should succeed
             ./dist/${{ matrix.artifact }} --version
