@@ -36,7 +36,8 @@ tsconfig.build.json
 *.md
 !README.md
 
-# Build process
+# Build process - include dist for publishing
+!dist/
 /scripts/
 /.github/
 /.husky/
