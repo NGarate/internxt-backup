@@ -11,6 +11,14 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual trigger with configurable options
+  workflow_dispatch:
+    inputs:
+      RELEASE_AGE_SECONDS:
+        description: 'Maximum age of release in seconds to consider for building (default: 1800 = 30 minutes)'
+        required: false
+        default: '1800'
+        type: string
 
 concurrency:
   group: release
@@ -54,7 +62,15 @@ jobs:
           # Configuration
           MAX_RETRIES=3
           RETRY_DELAY=5
-          MAX_RELEASE_AGE_SECONDS=600  # 10 minutes
+          
+          # Determine release age threshold: input > env var > default (1800 = 30 minutes)
+          if [[ -n "${{ github.event.inputs.RELEASE_AGE_SECONDS }}" ]]; then
+            RELEASE_AGE_SECONDS=${{ github.event.inputs.RELEASE_AGE_SECONDS }}
+          elif [[ -n "$RELEASE_AGE_SECONDS" ]]; then
+            RELEASE_AGE_SECONDS=$RELEASE_AGE_SECONDS
+          else
+            RELEASE_AGE_SECONDS=1800
+          fi
 
           # Get the latest release with retry logic
           LATEST_RELEASE=""
@@ -93,13 +109,13 @@ jobs:
           TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
           CREATED_AT=$(echo "$LATEST_RELEASE" | jq -r '.created_at')
 
-          # Check if the release was created within the last 10 minutes (to avoid rebuilding old releases)
+          # Check if the release was created within the configured threshold (default: 30 minutes)
           RELEASE_TIME=$(date -d "$CREATED_AT" +%s)
           NOW=$(date +%s)
           AGE=$((NOW - RELEASE_TIME))
 
-          if [[ $AGE -gt $MAX_RELEASE_AGE_SECONDS ]]; then
-            echo "Latest release is older than $MAX_RELEASE_AGE_SECONDS seconds ($AGE seconds), skipping build"
+          if [[ $AGE -gt $RELEASE_AGE_SECONDS ]]; then
+            echo "Latest release is older than $RELEASE_AGE_SECONDS seconds ($AGE seconds), skipping build"
             echo "should_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi
