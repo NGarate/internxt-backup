@@ -111,7 +111,9 @@ gh run view <run-id> --log
 To cut a release when ready (triggers semantic-release → version bump → CHANGELOG → GitHub release → 7-platform build):
 
 ```bash
-gh workflow run semantic-release.yml
+gh workflow run create-release-metadata.yml --ref master
+# or use the interactive helper (asks for confirmation)
+bun run release:trigger
 ```
 
 ## Testing Patterns

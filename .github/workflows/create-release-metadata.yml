@@ -1,4 +1,4 @@
-name: Semantic Release
+name: Create Release Metadata
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   release:
-    name: Semantic Release
+    name: Create Release Metadata
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -47,9 +47,9 @@ jobs:
         run: bun run build
 
       # Note: GITHUB_TOKEN is used here which means tag push events won't trigger
-      # other workflows directly. The release.yml workflow uses workflow_run trigger
+      # other workflows directly. The build-release-assets.yml workflow uses workflow_run trigger
       # to detect when this workflow completes and then builds the release assets.
-      - name: Semantic Release
+      - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_AUTHOR_NAME: github-actions[bot]

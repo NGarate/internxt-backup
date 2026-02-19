@@ -1,10 +1,10 @@
-name: Release
+name: Build Release Assets
 
 on:
-  # Trigger when semantic-release workflow completes
+  # Trigger when release metadata workflow completes
   # This works around the limitation where GITHUB_TOKEN events don't trigger workflows
   workflow_run:
-    workflows: ['Semantic Release']
+    workflows: ['Create Release Metadata']
     types:
       - completed
   # Keep push trigger as fallback for manual tag pushes (e.g., with PAT)
@@ -50,10 +50,10 @@ jobs:
             exit 0
           fi
 
-          # Handle workflow_run event (triggered by semantic-release)
+          # Handle workflow_run event (triggered by Create Release Metadata workflow)
           # Only proceed if the triggering workflow was successful
           if [[ "$WORKFLOW_CONCLUSION" != "success" ]]; then
-            echo "Semantic release workflow did not succeed, skipping build"
+            echo "Release metadata workflow did not succeed, skipping build"
             echo "should_build=false" >> $GITHUB_OUTPUT
             exit 0
           fi

@@ -1,7 +1,7 @@
 # Internxt Backup
 
 [![CI](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml/badge.svg)](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml)
-[![Release](https://github.com/ngarate/internxt-backup/actions/workflows/release.yml/badge.svg)](https://github.com/ngarate/internxt-backup/releases)
+[![Build Release Assets](https://github.com/ngarate/internxt-backup/actions/workflows/build-release-assets.yml/badge.svg)](https://github.com/ngarate/internxt-backup/releases)
 
 A simple, fast, and efficient tool for backing up files to Internxt Drive using the Internxt CLI.
 
@@ -120,13 +120,13 @@ This project uses **GitHub Actions** for continuous integration and deployment w
 ### Workflow Overview
 
 ```text
-main branch (protected)
+master branch (protected)
     │
     ├── Pull Request → CI checks (lint, test, typecheck, security) → Merge
     │
-    └── Push to main
+    └── Push to master
         │
-        └── semantic-release analyzes commits
+        └── Create Release Metadata workflow (semantic-release)
             │
             ├── No release needed → Skip
             │
@@ -134,7 +134,7 @@ main branch (protected)
                 ├── Bump version in package.json
                 ├── Generate CHANGELOG.md
                 ├── Create Git tag (vX.Y.Z)
-                └── Trigger release workflow
+                └── Trigger Build Release Assets workflow
                     └── Build cross-platform executables
                         └── Upload to GitHub Release
 ```
@@ -172,6 +172,61 @@ BREAKING CHANGE: config file format changed from JSON to YAML"
 ```
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for detailed commit conventions.
+
+### How to Trigger a Release (Step by Step)
+
+1. Merge releasable commits into `master` using Conventional Commits (`feat:`, `fix:`, `feat!:`...).
+2. Confirm `CI` passed on the latest `master` commit.
+3. Open GitHub → `Actions` → `Create Release Metadata`.
+4. Click `Run workflow`, select `master`, then click `Run workflow`.
+5. Optional CLI equivalent:
+
+```bash
+# Trigger from CLI
+gh workflow run create-release-metadata.yml --ref master
+```
+
+6. Wait for `Create Release Metadata` to finish.
+7. If a release is created, `Build Release Assets` starts automatically and builds all platform binaries.
+8. Verify the GitHub Release has:
+- a new tag like `vX.Y.Z`
+- uploaded platform assets (`.tar.gz` / `.zip` / `.exe`)
+- updated release notes from `CHANGELOG.md`
+
+### GitHub CLI Flow (`gh`)
+
+```bash
+# 1) Authenticate once (if needed)
+gh auth status || gh auth login
+
+# 2) Trigger release workflow directly
+gh workflow run create-release-metadata.yml --ref master
+
+# 3) Check latest runs
+gh run list --workflow create-release-metadata.yml --limit 5
+
+# 4) Watch the latest run (replace <run-id>)
+gh run watch <run-id>
+```
+
+You can also use the interactive helper script (asks for confirmation before dispatching):
+
+```bash
+# Trigger on master (default)
+bun run release:trigger
+
+# Trigger on a specific ref
+bun run release:trigger -- develop
+```
+
+### Release Flow Details
+
+1. `Create Release Metadata` runs `semantic-release`, analyzes commits, and decides whether a new version is needed.
+2. If no releasable commit exists, the flow stops with no new tag/release.
+3. If a release is needed, semantic-release creates the tag and release metadata.
+4. `Build Release Assets` is triggered via `workflow_run`, resolves the new tag, and builds binaries in a multi-OS matrix.
+5. Built artifacts are uploaded to the same GitHub Release.
+6. Release notes are then updated with the matching `CHANGELOG.md` entry and install instructions.
 
 ### Download Pre-built Executables
 
@@ -224,6 +279,9 @@ bun run build
 
 # Build for specific platform
 bun build --compile --target bun-linux-x64 --outfile ./dist/internxt-backup ./index.ts
+
+# Trigger release workflow (asks for confirmation)
+bun run release:trigger
 ```
 
 ### Available Build Targets
@@ -241,10 +299,12 @@ bun build --compile --target bun-linux-x64 --outfile ./dist/internxt-backup ./in
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml              # CI pipeline
-│   │   ├── release.yml         # Release builds
-│   │   └── semantic-release.yml # Automated versioning
+│   │   ├── build-release-assets.yml    # Release builds
+│   │   └── create-release-metadata.yml # Automated versioning
 │   ├── dependabot.yml          # Automated dependency updates
 │   └── oxlintrc.json          # Linting rules
+├── scripts/
+│   └── trigger-release.sh      # Interactive release trigger helper
 ├── src/                       # Source modules
 ├── index.ts                   # Main entry point
 ├── index.test.ts             # Tests
