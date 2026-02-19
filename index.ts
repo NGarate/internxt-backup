@@ -2,15 +2,16 @@
 
 import { parseArgs } from 'node:util';
 import { syncFiles, SyncOptions } from './src/file-sync';
+import { restoreFiles } from './src/file-restore';
 import { createScheduler } from './src/core/scheduler/scheduler';
 import { bold, blue, red } from './src/utils/logger';
 
 const packageJson = await Bun.file('package.json').json();
 const VERSION = packageJson.version || 'unknown';
 
-function parse() {
+function parseBackupArgs(args: string[]) {
   const { values, positionals } = parseArgs({
-    args: Bun.argv.slice(2),
+    args,
     options: {
       source: { type: 'string' },
       target: { type: 'string' },
@@ -18,6 +19,8 @@ function parse() {
       schedule: { type: 'string' },
       daemon: { type: 'boolean' },
       force: { type: 'boolean' },
+      full: { type: 'boolean' },
+      'sync-deletes': { type: 'boolean' },
       resume: { type: 'boolean' },
       'chunk-size': { type: 'string' },
       quiet: { type: 'boolean' },
@@ -34,19 +37,42 @@ function parse() {
   };
 }
 
+function parseRestoreArgs(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      source: { type: 'string' },
+      target: { type: 'string' },
+      pattern: { type: 'string' },
+      path: { type: 'string' },
+      cores: { type: 'string' },
+      quiet: { type: 'boolean' },
+      verbose: { type: 'boolean' },
+      'no-verify': { type: 'boolean' },
+      help: { type: 'boolean', short: 'h' },
+    },
+    allowPositionals: true,
+  });
+
+  return values;
+}
+
 function showHelp() {
   console.log(`
 ${bold(`Internxt Backup v${VERSION} - A simple CLI for backing up files to Internxt Drive`)}
 
 ${bold(`Usage: internxt-backup <source-dir> [options]`)})
+${bold(`       internxt-backup restore [options]`)}
 
-${bold('Options:')}
+${bold('Backup Options:')}
   --source=<path>         Source directory to backup (can also be positional)
   --target=<path>         Target folder in Internxt Drive (default: root)
   --cores=<number>        Number of concurrent uploads (default: 2/3 of CPU cores)
   --schedule=<cron>       Cron expression for scheduled backups (e.g., "0 2 * * *")
   --daemon                Run as a daemon with scheduled backups
   --force                 Force upload all files regardless of hash cache
+  --full                  Create a full backup baseline (for differential backups)
+  --sync-deletes          Delete remote files that were deleted locally
   --resume                Enable resume capability for large files
   --chunk-size=<mb>       Chunk size in MB for large files (default: 50)
   --quiet                 Show minimal output (only errors and progress)
@@ -54,11 +80,26 @@ ${bold('Options:')}
   --help, -h              Show this help message
   --version, -v           Show version information
 
-${bold('Examples:')}
+${bold('Restore Options:')}
+  --source=<path>         Remote path in Internxt Drive to restore from (required)
+  --target=<path>         Local directory to restore files to (required)
+  --pattern=<glob>        Filter files by glob pattern (e.g., "*.jpg", "*.{jpg,png}")
+  --path=<subdir>         Restore only a specific subdirectory
+  --cores=<number>        Number of concurrent downloads (default: 2/3 of CPU cores)
+  --no-verify             Skip checksum verification after download
+  --quiet                 Show minimal output
+  --verbose               Show detailed output
+
+${bold('Backup Examples:')}
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos
+  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --full
+  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --sync-deletes
   internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
-  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --force
-  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --cores=2 --resume
+
+${bold('Restore Examples:')}
+  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored
+  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --pattern="*.jpg"
+  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --path="2024/"
 `);
 }
 
@@ -85,7 +126,44 @@ async function main() {
       process.exit(0);
     }
 
-    const args = parse();
+    const isRestore = rawArgs[0] === 'restore';
+
+    if (isRestore) {
+      const args = parseRestoreArgs(rawArgs.slice(1));
+
+      if (args.help) {
+        showHelp();
+        process.exit(0);
+      }
+
+      if (!args.source) {
+        console.error(red('Error: --source is required for restore'));
+        console.log();
+        showHelp();
+        process.exit(1);
+      }
+
+      if (!args.target) {
+        console.error(red('Error: --target is required for restore'));
+        console.log();
+        showHelp();
+        process.exit(1);
+      }
+
+      await restoreFiles({
+        source: args.source,
+        target: args.target,
+        pattern: args.pattern,
+        path: args.path,
+        cores: args.cores ? parseInt(args.cores) : undefined,
+        quiet: args.quiet,
+        verbose: args.verbose,
+        verify: !args['no-verify'],
+      });
+      return;
+    }
+
+    const args = parseBackupArgs(rawArgs);
 
     if (!args.sourceDir) {
       console.error(red('Error: Source directory is required'));
@@ -100,6 +178,8 @@ async function main() {
       quiet: args.quiet,
       verbose: args.verbose,
       force: args.force,
+      full: args.full,
+      syncDeletes: args['sync-deletes'],
       resume: args.resume,
       chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
     };

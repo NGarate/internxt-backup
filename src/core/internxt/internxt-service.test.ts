@@ -59,5 +59,15 @@ describe('createInternxtService', () => {
       const service = createInternxtService();
       expect(typeof service.deleteFile).toBe('function');
     });
+
+    it('should have downloadFile method', () => {
+      const service = createInternxtService();
+      expect(typeof service.downloadFile).toBe('function');
+    });
+
+    it('should have listFilesRecursive method', () => {
+      const service = createInternxtService();
+      expect(typeof service.listFilesRecursive).toBe('function');
+    });
   });
 });

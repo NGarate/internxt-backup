@@ -11,6 +11,8 @@ import type { ResumableUploader } from '../../src/core/upload/resumable-uploader
 import type { HashCache } from '../../src/core/upload/hash-cache';
 import type { ProgressTracker } from '../../src/core/upload/progress-tracker';
 import type { FileScannerInterface } from '../../src/interfaces/file-scanner';
+import type { BackupState } from '../../src/core/backup/backup-state';
+import type { Downloader } from '../../src/core/download/downloader';
 
 /**
  * Skip tests that use accessor property spying (a common Bun limitation)
@@ -102,6 +104,15 @@ export function createMockInternxtService(): InternxtService {
     ),
     fileExists: mock(() => Promise.resolve(false)),
     deleteFile: mock(() => Promise.resolve(true)),
+    downloadFile: mock(() =>
+      Promise.resolve({
+        success: true,
+        fileId: 'mock-uuid',
+        localPath: '/local/path',
+        error: undefined,
+      }),
+    ),
+    listFilesRecursive: mock(() => Promise.resolve([])),
   };
 }
 
@@ -195,6 +206,50 @@ export function createMockFileInfo(
     size: 1024,
     checksum: 'mocked-checksum-' + relativePath,
     hasChanged: needsUpload as boolean | null,
+  };
+}
+
+/**
+ * Creates a mock BackupState matching the factory return type
+ */
+export function createMockBackupState(): BackupState {
+  return {
+    loadBaseline: mock(() => Promise.resolve(null)),
+    saveBaseline: mock(() => Promise.resolve()),
+    createBaselineFromScan: mock(() => ({
+      version: 1,
+      timestamp: new Date().toISOString(),
+      sourceDir: '/source',
+      targetDir: '/target',
+      files: {},
+    })),
+    getChangedSinceBaseline: mock(() => []),
+    detectDeletions: mock(() => []),
+    getBaseline: mock(() => null),
+    uploadManifest: mock(() => Promise.resolve(true)),
+    downloadManifest: mock(() => Promise.resolve(null)),
+  };
+}
+
+/**
+ * Creates a mock Downloader matching the factory return type
+ */
+export function createMockDownloader(): Downloader {
+  return {
+    startDownload: mock(() => Promise.resolve()),
+    handleFileDownload: mock(() =>
+      Promise.resolve({
+        success: true,
+        remotePath: '/remote',
+        localPath: '/local',
+      }),
+    ),
+    getStats: mock(() => ({
+      downloadedCount: 0,
+      failedCount: 0,
+      verifiedCount: 0,
+      verifyFailedCount: 0,
+    })),
   };
 }
 

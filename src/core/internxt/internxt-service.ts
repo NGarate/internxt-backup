@@ -4,11 +4,13 @@ import * as logger from '../../utils/logger';
 import {
   InternxtCLICheckResult,
   InternxtUploadResult,
+  InternxtDownloadResult,
   InternxtFolderResult,
   InternxtListResult,
   InternxtFileInfo,
   InternxtServiceOptions,
 } from '../../interfaces/internxt';
+import { RemoteFileEntry } from '../../interfaces/download';
 
 const execAsync = promisify(exec);
 
@@ -570,6 +572,84 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
     }
   };
 
+  const downloadFile = async (
+    fileId: string,
+    targetDirectory: string,
+    overwrite: boolean = true,
+  ): Promise<InternxtDownloadResult> => {
+    try {
+      logger.verbose(
+        `Downloading file ${fileId} to ${targetDirectory}`,
+        verbosity,
+      );
+
+      const args = [
+        `--id=${shellEscape(fileId)}`,
+        `--directory=${shellEscape(targetDirectory)}`,
+        '--json',
+        '--non-interactive',
+      ];
+      if (overwrite) {
+        args.push('--overwrite');
+      }
+
+      const { stdout } = await execAsync(
+        `internxt download-file ${args.join(' ')}`,
+      );
+
+      try {
+        const response = JSON.parse(stdout);
+        if (response.success === false) {
+          return {
+            success: false,
+            fileId,
+            localPath: targetDirectory,
+            error: response.message,
+          };
+        }
+      } catch {
+        // Non-JSON output is acceptable
+      }
+
+      return { success: true, fileId, localPath: targetDirectory };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        fileId,
+        localPath: targetDirectory,
+        error: errorMessage,
+      };
+    }
+  };
+
+  const listFilesRecursive = async (
+    remotePath: string,
+  ): Promise<RemoteFileEntry[]> => {
+    const result = await listFiles(remotePath);
+    if (!result.success) {
+      return [];
+    }
+
+    const entries: RemoteFileEntry[] = [];
+    for (const file of result.files) {
+      if (file.isFolder) {
+        const subEntries = await listFilesRecursive(file.path);
+        entries.push(...subEntries);
+      } else {
+        entries.push({
+          uuid: file.uuid!,
+          name: file.name,
+          remotePath: file.path,
+          size: file.size,
+          isFolder: false,
+        });
+      }
+    }
+    return entries;
+  };
+
   return {
     checkCLI,
     uploadFile,
@@ -578,6 +658,8 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
     listFiles,
     fileExists,
     deleteFile,
+    downloadFile,
+    listFilesRecursive,
   };
 }
 

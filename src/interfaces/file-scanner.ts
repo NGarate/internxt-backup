@@ -11,6 +11,28 @@ export interface FileInfo {
   size: number;
   checksum: string;
   hasChanged: boolean | null;
+  mode?: number;
+}
+
+/**
+ * Metadata stored per file in backup manifests and baseline snapshots
+ */
+export interface FileMetadata {
+  checksum: string;
+  size: number;
+  mode: number;
+  mtime: string;
+}
+
+/**
+ * A full-backup baseline snapshot
+ */
+export interface BaselineSnapshot {
+  version: number;
+  timestamp: string;
+  sourceDir: string;
+  targetDir: string;
+  files: Record<string, FileMetadata>;
 }
 
 /**

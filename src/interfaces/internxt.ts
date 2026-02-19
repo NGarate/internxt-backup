@@ -50,6 +50,13 @@ export interface UploadProgress {
   totalBytes: number;
 }
 
+export interface InternxtDownloadResult {
+  success: boolean;
+  fileId: string;
+  localPath: string;
+  error?: string;
+}
+
 export interface ChunkedUploadState {
   filePath: string;
   remotePath: string;

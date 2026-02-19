@@ -135,13 +135,13 @@ static result line.
 
 ### 3.1 Semantic Color Mapping
 
-| Color    | Usage          | Example                                   |
-| -------- | -------------- | ----------------------------------------- |
-| Red      | Errors         | `❌ Failed to upload file.txt`            |
-| Yellow   | Warnings       | `⚠️ 3 files skipped (unchanged)`          |
-| Green    | Success        | `✅ Backup completed`                     |
-| Blue     | Info/status    | `ℹ️ Starting daemon mode`                 |
-| Dim/gray | Secondary info | Timestamps, file paths in verbose mode    |
+| Color    | Usage          | Example                                |
+| -------- | -------------- | -------------------------------------- |
+| Red      | Errors         | `❌ Failed to upload file.txt`         |
+| Yellow   | Warnings       | `⚠️ 3 files skipped (unchanged)`       |
+| Green    | Success        | `✅ Backup completed`                  |
+| Blue     | Info/status    | `ℹ️ Starting daemon mode`              |
+| Dim/gray | Secondary info | Timestamps, file paths in verbose mode |
 
 ### 3.2 Respect the Environment
 

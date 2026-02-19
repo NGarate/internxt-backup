@@ -382,17 +382,17 @@ bun publish
 
 ## Important Files and Their Purposes
 
-| File                                          | Purpose                                               |
-| --------------------------------------------- | ----------------------------------------------------- |
-| `index.ts`                                    | CLI entry point, argument parsing, main orchestration |
-| `src/file-sync.ts`                            | Core sync logic, coordinates scanner and uploader     |
-| `src/core/file-scanner.ts`                    | Discovers files, calculates checksums, tracks changes |
-| `src/core/upload/uploader.ts`                 | Upload orchestration, parallel processing             |
-| `src/core/internxt/internxt-service.ts`       | Internxt CLI wrapper and interaction                  |
-| `src/core/scheduler/scheduler.ts`             | Cron-based scheduled backups                          |
-| `src/utils/logger.ts`                         | Colored output with verbosity levels                  |
-| `bunfig.toml`                                 | Bun configuration (telemetry off, test preload)       |
-| `.releaserc.json`                             | semantic-release configuration                        |
+| File                                    | Purpose                                               |
+| --------------------------------------- | ----------------------------------------------------- |
+| `index.ts`                              | CLI entry point, argument parsing, main orchestration |
+| `src/file-sync.ts`                      | Core sync logic, coordinates scanner and uploader     |
+| `src/core/file-scanner.ts`              | Discovers files, calculates checksums, tracks changes |
+| `src/core/upload/uploader.ts`           | Upload orchestration, parallel processing             |
+| `src/core/internxt/internxt-service.ts` | Internxt CLI wrapper and interaction                  |
+| `src/core/scheduler/scheduler.ts`       | Cron-based scheduled backups                          |
+| `src/utils/logger.ts`                   | Colored output with verbosity levels                  |
+| `bunfig.toml`                           | Bun configuration (telemetry off, test preload)       |
+| `.releaserc.json`                       | semantic-release configuration                        |
 
 ---
 

@@ -80,6 +80,7 @@ export function createFileScanner(
             size: stats.size,
             checksum,
             hasChanged: null,
+            mode: stats.mode,
           });
         }
       }

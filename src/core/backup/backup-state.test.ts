@@ -1,0 +1,138 @@
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { createBackupState } from './backup-state';
+import { FileInfo, BaselineSnapshot } from '../../interfaces/file-scanner';
+
+describe('BackupState', () => {
+  let backupState: ReturnType<typeof createBackupState>;
+
+  beforeEach(() => {
+    backupState = createBackupState(0);
+  });
+
+  describe('getChangedSinceBaseline', () => {
+    it('should return all files when no baseline exists', () => {
+      const files: FileInfo[] = [
+        {
+          relativePath: 'file1.txt',
+          absolutePath: '/src/file1.txt',
+          size: 100,
+          checksum: 'abc',
+          hasChanged: null,
+        },
+      ];
+
+      const changed = backupState.getChangedSinceBaseline(files);
+      expect(changed).toEqual(['file1.txt']);
+    });
+
+    it('should detect changed files against baseline', async () => {
+      const snapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: new Date().toISOString(),
+        sourceDir: '/src',
+        targetDir: '/backup',
+        files: {
+          'file1.txt': {
+            checksum: 'abc',
+            size: 100,
+            mode: 0o644,
+            mtime: new Date().toISOString(),
+          },
+          'file2.txt': {
+            checksum: 'def',
+            size: 200,
+            mode: 0o644,
+            mtime: new Date().toISOString(),
+          },
+        },
+      };
+      await backupState.saveBaseline(snapshot);
+
+      const currentFiles: FileInfo[] = [
+        {
+          relativePath: 'file1.txt',
+          absolutePath: '/src/file1.txt',
+          size: 100,
+          checksum: 'abc',
+          hasChanged: null,
+        },
+        {
+          relativePath: 'file2.txt',
+          absolutePath: '/src/file2.txt',
+          size: 200,
+          checksum: 'CHANGED',
+          hasChanged: null,
+        },
+        {
+          relativePath: 'file3.txt',
+          absolutePath: '/src/file3.txt',
+          size: 300,
+          checksum: 'new',
+          hasChanged: null,
+        },
+      ];
+
+      const changed = backupState.getChangedSinceBaseline(currentFiles);
+      expect(changed).toEqual(['file2.txt', 'file3.txt']);
+    });
+  });
+
+  describe('detectDeletions', () => {
+    it('should return empty array when no baseline exists', () => {
+      const current = new Set(['file1.txt']);
+      expect(backupState.detectDeletions(current)).toEqual([]);
+    });
+
+    it('should detect files missing from current set', async () => {
+      const snapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: new Date().toISOString(),
+        sourceDir: '/src',
+        targetDir: '/backup',
+        files: {
+          'file1.txt': {
+            checksum: 'abc',
+            size: 100,
+            mode: 0o644,
+            mtime: new Date().toISOString(),
+          },
+          'file2.txt': {
+            checksum: 'def',
+            size: 200,
+            mode: 0o644,
+            mtime: new Date().toISOString(),
+          },
+          'file3.txt': {
+            checksum: 'ghi',
+            size: 300,
+            mode: 0o644,
+            mtime: new Date().toISOString(),
+          },
+        },
+      };
+      await backupState.saveBaseline(snapshot);
+
+      const currentPaths = new Set(['file1.txt', 'file3.txt']);
+      const deleted = backupState.detectDeletions(currentPaths);
+      expect(deleted).toEqual(['file2.txt']);
+    });
+  });
+
+  describe('getBaseline', () => {
+    it('should return null when no baseline loaded', () => {
+      expect(backupState.getBaseline()).toBeNull();
+    });
+
+    it('should return baseline after save', async () => {
+      const snapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/src',
+        targetDir: '/backup',
+        files: {},
+      };
+      await backupState.saveBaseline(snapshot);
+      expect(backupState.getBaseline()).toEqual(snapshot);
+    });
+  });
+});

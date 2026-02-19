@@ -2,6 +2,7 @@ import * as logger from '../../utils/logger';
 
 export function createProgressTracker(
   _verbosity: number = logger.Verbosity.Normal,
+  operationName: string = 'Upload',
 ) {
   let totalFiles = 0;
   let completedFiles = 0;
@@ -27,8 +28,10 @@ export function createProgressTracker(
   const setupOutputInterception = () => {
     process.stdout.write = (
       chunk: Uint8Array | string,
-      encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void,
+      encodingOrCallback?:
+        | BufferEncoding
+        | ((err?: Error | null) => void),
+      callback?: (err?: Error | null) => void,
     ): boolean => {
       if (!isTrackingActive) {
         return originalStdoutWrite.call(
@@ -64,8 +67,10 @@ export function createProgressTracker(
 
     process.stderr.write = (
       chunk: Uint8Array | string,
-      encodingOrCallback?: BufferEncoding | ((err?: Error) => void),
-      callback?: (err?: Error) => void,
+      encodingOrCallback?:
+        | BufferEncoding
+        | ((err?: Error | null) => void),
+      callback?: (err?: Error | null) => void,
     ): boolean => {
       if (!isTrackingActive) {
         return originalStderrWrite.call(
@@ -164,16 +169,17 @@ export function createProgressTracker(
       stopProgressUpdates();
     }
     process.stdout.write('\n');
+    const opLower = operationName.toLowerCase();
     if (failedFiles === 0) {
       logger.always(
         logger.green(
-          `Upload completed successfully! All ${completedFiles} files uploaded.`,
+          `${operationName} completed successfully! All ${completedFiles} files ${opLower}ed.`,
         ),
       );
     } else {
       logger.always(
         logger.yellow(
-          `Upload completed with issues: ${completedFiles} succeeded, ${failedFiles} failed.`,
+          `${operationName} completed with issues: ${completedFiles} succeeded, ${failedFiles} failed.`,
         ),
       );
     }

@@ -8,8 +8,8 @@ import { createUploader } from './core/upload/uploader';
 import { createInternxtService } from './core/internxt/internxt-service';
 import { createHashCache } from './core/upload/hash-cache';
 import { createProgressTracker } from './core/upload/progress-tracker';
-
 import { createResumableUploader } from './core/upload/resumable-uploader';
+import { createBackupState } from './core/backup/backup-state';
 
 export interface SyncOptions {
   cores?: number;
@@ -19,13 +19,41 @@ export interface SyncOptions {
   force?: boolean;
   resume?: boolean;
   chunkSize?: number;
+  full?: boolean;
+  syncDeletes?: boolean;
+}
+
+export interface SyncDependencies {
+  createFileScanner?: typeof createFileScanner;
+  createUploader?: typeof createUploader;
+  createInternxtService?: typeof createInternxtService;
+  createHashCache?: typeof createHashCache;
+  createProgressTracker?: typeof createProgressTracker;
+  createResumableUploader?: typeof createResumableUploader;
+  createBackupState?: typeof createBackupState;
+  getOptimalConcurrency?: typeof getOptimalConcurrency;
 }
 
 export async function syncFiles(
   sourceDir: string,
   options: SyncOptions,
+  dependencies: SyncDependencies = {},
 ): Promise<void> {
   try {
+    const makeFileScanner =
+      dependencies.createFileScanner ?? createFileScanner;
+    const makeUploader = dependencies.createUploader ?? createUploader;
+    const makeInternxtService =
+      dependencies.createInternxtService ?? createInternxtService;
+    const makeHashCache = dependencies.createHashCache ?? createHashCache;
+    const makeProgressTracker =
+      dependencies.createProgressTracker ?? createProgressTracker;
+    const makeResumableUploader =
+      dependencies.createResumableUploader ?? createResumableUploader;
+    const makeBackupState = dependencies.createBackupState ?? createBackupState;
+    const resolveConcurrency =
+      dependencies.getOptimalConcurrency ?? getOptimalConcurrency;
+
     const verbosity = options.quiet
       ? Verbosity.Quiet
       : options.verbose
@@ -33,7 +61,7 @@ export async function syncFiles(
         : Verbosity.Normal;
 
     logger.info('Checking Internxt CLI...', verbosity);
-    const internxtService = createInternxtService({ verbosity });
+    const internxtService = makeInternxtService({ verbosity });
     const cliStatus = await internxtService.checkCLI();
 
     if (!cliStatus.installed) {
@@ -52,17 +80,21 @@ export async function syncFiles(
 
     logger.success(`Internxt CLI v${cliStatus.version} ready`, verbosity);
 
-    const fileScanner = createFileScanner(sourceDir, verbosity, options.force);
-    const concurrentUploads = getOptimalConcurrency(options.cores);
+    const fileScanner = makeFileScanner(
+      sourceDir,
+      verbosity,
+      options.force || options.full,
+    );
+    const concurrentUploads = resolveConcurrency(options.cores);
 
-    const hashCache = createHashCache(
+    const hashCache = makeHashCache(
       path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
       verbosity,
     );
-    const progressTracker = createProgressTracker(verbosity);
+    const progressTracker = makeProgressTracker(verbosity);
 
     const resumableUploader = options.resume
-      ? createResumableUploader(internxtService, {
+      ? makeResumableUploader(internxtService, {
           chunkSize: options.chunkSize
             ? options.chunkSize * 1024 * 1024
             : undefined,
@@ -70,7 +102,7 @@ export async function syncFiles(
         })
       : undefined;
 
-    const uploader = createUploader(
+    const uploader = makeUploader(
       concurrentUploads,
       options.target || '/',
       verbosity,
@@ -86,10 +118,89 @@ export async function syncFiles(
 
     const scanResult = await fileScanner.scan();
 
-    if (scanResult.filesToUpload.length === 0) {
+    // Differential backup logic
+    const backupState = makeBackupState(verbosity);
+    await backupState.loadBaseline();
+
+    let filesToUpload = scanResult.filesToUpload;
+
+    if (options.full) {
+      filesToUpload = scanResult.allFiles.map((f) => ({
+        ...f,
+        hasChanged: true,
+      }));
+      logger.info(
+        `Full backup: all ${filesToUpload.length} files will be uploaded.`,
+        verbosity,
+      );
+    } else if (backupState.getBaseline() && !options.force) {
+      const changedPaths = new Set(
+        backupState.getChangedSinceBaseline(scanResult.allFiles),
+      );
+      filesToUpload = scanResult.allFiles
+        .filter((f) => changedPaths.has(f.relativePath))
+        .map((f) => ({ ...f, hasChanged: true }));
+      logger.info(
+        `Differential backup: ${filesToUpload.length} files changed since last full backup.`,
+        verbosity,
+      );
+    }
+
+    // Deletion detection
+    const currentPaths = new Set(
+      scanResult.allFiles.map((f) => f.relativePath),
+    );
+    const deletedFiles = backupState.detectDeletions(currentPaths);
+
+    if (deletedFiles.length > 0) {
+      logger.warning(
+        `${deletedFiles.length} files were deleted locally since last backup:`,
+        verbosity,
+      );
+      for (const f of deletedFiles) {
+        logger.warning(`  - ${f}`, verbosity);
+      }
+
+      if (options.syncDeletes) {
+        logger.info('Syncing deletions to remote...', verbosity);
+        const targetDir = options.target || '/';
+        for (const relativePath of deletedFiles) {
+          const remotePath =
+            targetDir === '/'
+              ? `/${relativePath}`
+              : `${targetDir}/${relativePath}`;
+          const deleted = await internxtService.deleteFile(remotePath);
+          if (deleted) {
+            logger.success(`Deleted remote: ${remotePath}`, verbosity);
+          } else {
+            logger.warning(`Failed to delete remote: ${remotePath}`, verbosity);
+          }
+        }
+      }
+    }
+
+    if (filesToUpload.length === 0) {
       logger.success('All files are up to date. Nothing to upload.', verbosity);
     } else {
-      await uploader.startUpload(scanResult.filesToUpload);
+      await uploader.startUpload(filesToUpload);
+    }
+
+    // Save baseline and upload manifest after successful backup
+    if (options.full || filesToUpload.length > 0) {
+      const snapshot = backupState.createBaselineFromScan(
+        sourceDir,
+        options.target || '/',
+        scanResult.allFiles,
+      );
+      await backupState.saveBaseline(snapshot);
+      await backupState.uploadManifest(internxtService, options.target || '/');
+
+      if (options.full) {
+        logger.success(
+          `Full backup baseline saved (${Object.keys(snapshot.files).length} files)`,
+          verbosity,
+        );
+      }
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

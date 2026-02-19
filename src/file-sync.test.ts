@@ -2,8 +2,28 @@
  * Tests for file-sync.ts
  */
 
-import { expect, describe, it } from 'bun:test';
-import { syncFiles, SyncOptions } from './file-sync';
+import { expect, describe, it, mock } from 'bun:test';
+import { syncFiles, SyncOptions, SyncDependencies } from './file-sync';
+import type { FileInfo, ScanResult, BaselineSnapshot } from './interfaces/file-scanner';
+import type { FileScanner } from './core/file-scanner';
+import type { Uploader } from './core/upload/uploader';
+import {
+  createMockBackupState,
+  createMockFileScanner,
+  createMockHashCache,
+  createMockInternxtService,
+  createMockProgressTracker,
+} from '../test-config/mocks/test-helpers';
+
+function createFile(relativePath: string, checksum: string): FileInfo {
+  return {
+    relativePath,
+    absolutePath: `/source/${relativePath}`,
+    size: 128,
+    checksum,
+    hasChanged: null,
+  };
+}
 
 describe('syncFiles', () => {
   describe('interface', () => {
@@ -27,6 +47,8 @@ describe('syncFiles', () => {
         force: true,
         resume: true,
         chunkSize: 100,
+        full: true,
+        syncDeletes: true,
       };
 
       expect(options.cores).toBe(4);
@@ -36,6 +58,8 @@ describe('syncFiles', () => {
       expect(options.force).toBe(true);
       expect(options.resume).toBe(true);
       expect(options.chunkSize).toBe(100);
+      expect(options.full).toBe(true);
+      expect(options.syncDeletes).toBe(true);
     });
 
     it('should work with empty options', () => {
@@ -49,6 +73,204 @@ describe('syncFiles', () => {
       };
 
       expect(options.target).toBe('/custom/target');
+    });
+  });
+
+  describe('behavior', () => {
+    it('should upload only differential files and delete removed remote files when syncDeletes is enabled', async () => {
+      const files: FileInfo[] = [
+        createFile('changed.txt', 'new-checksum'),
+        createFile('same.txt', 'same-checksum'),
+      ];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: [],
+        totalSizeBytes: files.reduce((total, file) => total + file.size, 0),
+        totalSizeMB: '0.00',
+      };
+
+      const scannerBase = createMockFileScanner();
+      const mockScanner = {
+        ...scannerBase,
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const deleteFile = mock(() => Promise.resolve(true));
+      mockInternxt.deleteFile = deleteFile;
+
+      const mockBackupState = createMockBackupState();
+      const baseline: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {
+          'changed.txt': {
+            checksum: 'old-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-01T00:00:00Z',
+          },
+          'same.txt': {
+            checksum: 'same-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-01T00:00:00Z',
+          },
+          'removed.txt': {
+            checksum: 'removed-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-01T00:00:00Z',
+          },
+        },
+      };
+
+      mockBackupState.getBaseline = mock(() => baseline);
+      mockBackupState.getChangedSinceBaseline = mock(() => ['changed.txt']);
+      mockBackupState.detectDeletions = mock(() => ['removed.txt']);
+
+      const snapshot = {
+        ...baseline,
+        timestamp: '2026-01-02T00:00:00Z',
+      };
+      mockBackupState.createBaselineFromScan = mock(() => snapshot);
+
+      const startUpload = mock(() => Promise.resolve());
+      const setFileScanner = mock(() => {});
+      const mockUploader = {
+        startUpload,
+        setFileScanner,
+        handleFileUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            filePath: 'changed.txt',
+          }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+      };
+
+      await syncFiles('/source', { target: '/Backups', syncDeletes: true }, dependencies);
+
+      expect(setFileScanner).toHaveBeenCalledTimes(1);
+      expect(mockBackupState.getChangedSinceBaseline).toHaveBeenCalledWith(files);
+      expect(startUpload).toHaveBeenCalledTimes(1);
+
+      const uploadedFiles = startUpload.mock.calls[0]?.[0] as FileInfo[];
+      expect(uploadedFiles.map((file) => file.relativePath)).toEqual(['changed.txt']);
+      expect(uploadedFiles[0]?.hasChanged).toBe(true);
+
+      expect(deleteFile).toHaveBeenCalledWith('/Backups/removed.txt');
+      expect(mockBackupState.saveBaseline).toHaveBeenCalledWith(snapshot);
+      expect(mockBackupState.uploadManifest).toHaveBeenCalledWith(
+        mockInternxt,
+        '/Backups',
+      );
+    });
+
+    it('should upload all files and save a fresh baseline during full backup', async () => {
+      const files: FileInfo[] = [
+        createFile('changed.txt', 'new-checksum'),
+        createFile('same.txt', 'same-checksum'),
+      ];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: [createFile('changed.txt', 'new-checksum')],
+        totalSizeBytes: files.reduce((total, file) => total + file.size, 0),
+        totalSizeMB: '0.00',
+      };
+
+      const scannerBase = createMockFileScanner();
+      const mockScanner = {
+        ...scannerBase,
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const deleteFile = mock(() => Promise.resolve(true));
+      mockInternxt.deleteFile = deleteFile;
+
+      const mockBackupState = createMockBackupState();
+      const snapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-03T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {
+          'changed.txt': {
+            checksum: 'new-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-03T00:00:00Z',
+          },
+          'same.txt': {
+            checksum: 'same-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-03T00:00:00Z',
+          },
+        },
+      };
+
+      mockBackupState.getBaseline = mock(() => null);
+      mockBackupState.detectDeletions = mock(() => ['removed.txt']);
+      mockBackupState.createBaselineFromScan = mock(() => snapshot);
+
+      const startUpload = mock(() => Promise.resolve());
+      const setFileScanner = mock(() => {});
+      const mockUploader = {
+        startUpload,
+        setFileScanner,
+        handleFileUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            filePath: 'changed.txt',
+          }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+      };
+
+      await syncFiles('/source', { target: '/Backups', full: true }, dependencies);
+
+      expect(setFileScanner).toHaveBeenCalledTimes(1);
+      expect(mockBackupState.getChangedSinceBaseline).not.toHaveBeenCalled();
+
+      const uploadedFiles = startUpload.mock.calls[0]?.[0] as FileInfo[];
+      expect(uploadedFiles.map((file) => file.relativePath).sort()).toEqual([
+        'changed.txt',
+        'same.txt',
+      ]);
+      for (const file of uploadedFiles) {
+        expect(file.hasChanged).toBe(true);
+      }
+
+      expect(deleteFile).not.toHaveBeenCalled();
+      expect(mockBackupState.saveBaseline).toHaveBeenCalledWith(snapshot);
+      expect(mockBackupState.uploadManifest).toHaveBeenCalledWith(
+        mockInternxt,
+        '/Backups',
+      );
     });
   });
 });
