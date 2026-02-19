@@ -13,6 +13,23 @@ export function createProgressTracker(
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
   let hasDrawnProgressBar = false;
 
+  const callWrite = (
+    write: typeof process.stdout.write,
+    stream: NodeJS.WriteStream,
+    chunk: Uint8Array | string,
+    encodingOrCallback?: unknown,
+    callback?: unknown,
+  ): boolean => {
+    return (
+      write as unknown as (
+        this: NodeJS.WriteStream,
+        chunk: Uint8Array | string,
+        encodingOrCallback?: unknown,
+        callback?: unknown,
+      ) => boolean
+    ).call(stream, chunk, encodingOrCallback, callback);
+  };
+
   const renderBar = (): string => {
     const processed = completedFiles + failedFiles;
     const percentage =
@@ -26,16 +43,17 @@ export function createProgressTracker(
   };
 
   const setupOutputInterception = () => {
-    process.stdout.write = (
+    process.stdout.write = ((
       chunk: Uint8Array | string,
-      encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
-      callback?: (err?: Error | null) => void,
+      encodingOrCallback?: unknown,
+      callback?: unknown,
     ): boolean => {
       if (!isTrackingActive) {
-        return originalStdoutWrite.call(
+        return callWrite(
+          originalStdoutWrite,
           process.stdout,
           chunk,
-          encodingOrCallback as BufferEncoding,
+          encodingOrCallback,
           callback,
         );
       }
@@ -47,10 +65,11 @@ export function createProgressTracker(
         hasDrawnProgressBar = false;
       }
 
-      const result = originalStdoutWrite.call(
+      const result = callWrite(
+        originalStdoutWrite,
         process.stdout,
         chunk,
-        encodingOrCallback as BufferEncoding,
+        encodingOrCallback,
         callback,
       );
 
@@ -61,18 +80,19 @@ export function createProgressTracker(
       }
 
       return result;
-    };
+    }) as typeof process.stdout.write;
 
-    process.stderr.write = (
+    process.stderr.write = ((
       chunk: Uint8Array | string,
-      encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
-      callback?: (err?: Error | null) => void,
+      encodingOrCallback?: unknown,
+      callback?: unknown,
     ): boolean => {
       if (!isTrackingActive) {
-        return originalStderrWrite.call(
+        return callWrite(
+          originalStderrWrite,
           process.stderr,
           chunk,
-          encodingOrCallback as BufferEncoding,
+          encodingOrCallback,
           callback,
         );
       }
@@ -84,10 +104,11 @@ export function createProgressTracker(
         hasDrawnProgressBar = false;
       }
 
-      const result = originalStderrWrite.call(
+      const result = callWrite(
+        originalStderrWrite,
         process.stderr,
         chunk,
-        encodingOrCallback as BufferEncoding,
+        encodingOrCallback,
         callback,
       );
 
@@ -98,7 +119,7 @@ export function createProgressTracker(
       }
 
       return result;
-    };
+    }) as typeof process.stderr.write;
   };
 
   const restoreOutput = () => {

@@ -96,6 +96,18 @@ bun test             # full test suite
 bun run build        # build artifact validation
 ```
 
+### Typecheck CI Debug
+
+- CI runs on Bun `1.3.8`, so callback typings can differ from newer local Bun toolchains.
+- If a CI typecheck fails but local checks pass, inspect the exact CI error with:
+
+```bash
+gh run list --workflow ci.yml --limit 5
+gh run view <run-id> --log
+```
+
+- For stream write overrides (`process.stdout.write`/`process.stderr.write`), avoid hardcoding a callback signature that only matches one Bun/Node typings set. Prefer compatibility wrappers/casts that preserve runtime behavior while satisfying both local and CI type definitions.
+
 To cut a release when ready (triggers semantic-release → version bump → CHANGELOG → GitHub release → 7-platform build):
 
 ```bash
