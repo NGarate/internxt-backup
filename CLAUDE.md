@@ -103,7 +103,7 @@ Mock factories are available in `test-config/mocks/test-helpers.ts` (imported vi
 - `createMockFileScanner(sourceDir?)` — scan, getFilesToUpload, updateFileHash, updateFileState, saveState
 - `createMockFileInfo(filePath, sourceDir?, needsUpload?)` — full FileInfo with defaults
 - `createMockLoggers()` — verbose, info, success, warning, error, always
-- `createMockFs()` — readFileSync, writeFileSync, existsSync, promises.*
+- `createMockFs()` — readFileSync, writeFileSync, existsSync, promises.\*
 - `mockProcessOutput()` — capture stdout/stderr in tests (call `.restore()` in afterEach)
 
 The `spyOn` wrapper from test-helpers gracefully handles Bun's accessor property limitation.
