@@ -4,7 +4,11 @@
 
 import { expect, describe, it, mock } from 'bun:test';
 import { syncFiles, SyncOptions, SyncDependencies } from './file-sync';
-import type { FileInfo, ScanResult, BaselineSnapshot } from './interfaces/file-scanner';
+import type {
+  FileInfo,
+  ScanResult,
+  BaselineSnapshot,
+} from './interfaces/file-scanner';
 import type { FileScanner } from './core/file-scanner';
 import type { Uploader } from './core/upload/uploader';
 import {
@@ -161,14 +165,22 @@ describe('syncFiles', () => {
         getOptimalConcurrency: () => 1,
       };
 
-      await syncFiles('/source', { target: '/Backups', syncDeletes: true }, dependencies);
+      await syncFiles(
+        '/source',
+        { target: '/Backups', syncDeletes: true },
+        dependencies,
+      );
 
       expect(setFileScanner).toHaveBeenCalledTimes(1);
-      expect(mockBackupState.getChangedSinceBaseline).toHaveBeenCalledWith(files);
+      expect(mockBackupState.getChangedSinceBaseline).toHaveBeenCalledWith(
+        files,
+      );
       expect(startUpload).toHaveBeenCalledTimes(1);
 
       const uploadedFiles = startUpload.mock.calls[0]?.[0] as FileInfo[];
-      expect(uploadedFiles.map((file) => file.relativePath)).toEqual(['changed.txt']);
+      expect(uploadedFiles.map((file) => file.relativePath)).toEqual([
+        'changed.txt',
+      ]);
       expect(uploadedFiles[0]?.hasChanged).toBe(true);
 
       expect(deleteFile).toHaveBeenCalledWith('/Backups/removed.txt');
@@ -251,7 +263,11 @@ describe('syncFiles', () => {
         getOptimalConcurrency: () => 1,
       };
 
-      await syncFiles('/source', { target: '/Backups', full: true }, dependencies);
+      await syncFiles(
+        '/source',
+        { target: '/Backups', full: true },
+        dependencies,
+      );
 
       expect(setFileScanner).toHaveBeenCalledTimes(1);
       expect(mockBackupState.getChangedSinceBaseline).not.toHaveBeenCalled();

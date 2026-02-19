@@ -40,8 +40,7 @@ export async function syncFiles(
   dependencies: SyncDependencies = {},
 ): Promise<void> {
   try {
-    const makeFileScanner =
-      dependencies.createFileScanner ?? createFileScanner;
+    const makeFileScanner = dependencies.createFileScanner ?? createFileScanner;
     const makeUploader = dependencies.createUploader ?? createUploader;
     const makeInternxtService =
       dependencies.createInternxtService ?? createInternxtService;

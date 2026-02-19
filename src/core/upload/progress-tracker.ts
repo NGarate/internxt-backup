@@ -28,9 +28,7 @@ export function createProgressTracker(
   const setupOutputInterception = () => {
     process.stdout.write = (
       chunk: Uint8Array | string,
-      encodingOrCallback?:
-        | BufferEncoding
-        | ((err?: Error | null) => void),
+      encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
       callback?: (err?: Error | null) => void,
     ): boolean => {
       if (!isTrackingActive) {
@@ -67,9 +65,7 @@ export function createProgressTracker(
 
     process.stderr.write = (
       chunk: Uint8Array | string,
-      encodingOrCallback?:
-        | BufferEncoding
-        | ((err?: Error | null) => void),
+      encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
       callback?: (err?: Error | null) => void,
     ): boolean => {
       if (!isTrackingActive) {
