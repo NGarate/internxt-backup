@@ -58,7 +58,6 @@ describe('createScheduler', () => {
         schedule: '0 2 * * *',
         syncOptions: {
           target: '/backup',
-          compress: true,
           cores: 4,
         },
       };

@@ -8,7 +8,7 @@ import { createUploader } from './core/upload/uploader';
 import { createInternxtService } from './core/internxt/internxt-service';
 import { createHashCache } from './core/upload/hash-cache';
 import { createProgressTracker } from './core/upload/progress-tracker';
-import { createCompressionService } from './core/compression/compression-service';
+
 import { createResumableUploader } from './core/upload/resumable-uploader';
 
 export interface SyncOptions {
@@ -17,8 +17,6 @@ export interface SyncOptions {
   quiet?: boolean;
   verbose?: boolean;
   force?: boolean;
-  compress?: boolean;
-  compressionLevel?: number;
   resume?: boolean;
   chunkSize?: number;
 }
@@ -63,10 +61,6 @@ export async function syncFiles(
     );
     const progressTracker = createProgressTracker(verbosity);
 
-    const compressionService = options.compress
-      ? createCompressionService({ level: options.compressionLevel, verbosity })
-      : undefined;
-
     const resumableUploader = options.resume
       ? createResumableUploader(internxtService, {
           chunkSize: options.chunkSize
@@ -84,7 +78,6 @@ export async function syncFiles(
         internxtService,
         hashCache,
         progressTracker,
-        compressionService,
         resumableUploader,
       },
     );

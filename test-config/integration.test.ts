@@ -9,7 +9,6 @@
  * - `uploader.test.ts` tests the core file upload functionality
  * - `file-scanner.test.ts` tests the directory scanning and checksum calculation
  * - `internxt-service.test.ts` tests the Internxt CLI integration
- * - `compression-service.test.ts` tests the file compression functionality
  * - `scheduler.test.ts` tests the backup scheduling functionality
  * - `resumable-uploader.test.ts` tests the large file upload with resume capability
  * - `file-sync.test.ts` tests the main sync orchestration
@@ -24,9 +23,8 @@
  * 6. Connecting to Internxt Drive with CLI
  * 7. Success message when no files need to be uploaded
  * 8. Error handling during upload process
- * 9. Compression workflow integration
- * 10. Resume capability for large files
- * 11. Scheduled backup daemon mode
+ * 9. Resume capability for large files
+ * 10. Scheduled backup daemon mode
  *
  * These tests are better suited for end-to-end testing with a real environment
  * or more advanced mocking frameworks beyond the scope of this project.

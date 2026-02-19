@@ -15,8 +15,6 @@ function parse() {
       source: { type: 'string' },
       target: { type: 'string' },
       cores: { type: 'string' },
-      compress: { type: 'boolean' },
-      'compression-level': { type: 'string' },
       schedule: { type: 'string' },
       daemon: { type: 'boolean' },
       force: { type: 'boolean' },
@@ -46,8 +44,6 @@ ${bold('Options:')}
   --source=<path>         Source directory to backup (can also be positional)
   --target=<path>         Target folder in Internxt Drive (default: root)
   --cores=<number>        Number of concurrent uploads (default: 2/3 of CPU cores)
-  --compress              Enable gzip compression before upload
-  --compression-level=<1-9> Compression level 1-9 (default: 6)
   --schedule=<cron>       Cron expression for scheduled backups (e.g., "0 2 * * *")
   --daemon                Run as a daemon with scheduled backups
   --force                 Force upload all files regardless of hash cache
@@ -60,7 +56,6 @@ ${bold('Options:')}
 
 ${bold('Examples:')}
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos
-  internxt-backup /mnt/disk/Documents --target=/Backups/Docs --compress
   internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos --force
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos --cores=2 --resume
@@ -105,10 +100,6 @@ async function main() {
       quiet: args.quiet,
       verbose: args.verbose,
       force: args.force,
-      compress: args.compress,
-      compressionLevel: args['compression-level']
-        ? parseInt(args['compression-level'])
-        : undefined,
       resume: args.resume,
       chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
     };

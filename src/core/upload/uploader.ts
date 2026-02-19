@@ -1,7 +1,6 @@
 import { FileInfo, FileScannerInterface } from '../../interfaces/file-scanner';
 import * as logger from '../../utils/logger';
 import { InternxtService } from '../internxt/internxt-service';
-import { CompressionService } from '../compression/compression-service';
 import { ResumableUploader } from './resumable-uploader';
 import { HashCache } from './hash-cache';
 import { ProgressTracker } from './progress-tracker';
@@ -9,8 +8,6 @@ import { processUploads } from './upload-pool';
 import { normalizePathInfo } from './path-utils';
 
 export interface UploaderOptions {
-  compress?: boolean;
-  compressionLevel?: number;
   resume?: boolean;
   chunkSize?: number;
 }
@@ -19,7 +16,6 @@ export interface UploaderDeps {
   internxtService: InternxtService;
   hashCache: HashCache;
   progressTracker: ProgressTracker;
-  compressionService?: CompressionService;
   resumableUploader?: ResumableUploader;
 }
 
@@ -30,13 +26,8 @@ export function createUploader(
   deps: UploaderDeps,
 ) {
   const normalizedTargetDir = targetDir.trim().replace(/\/+$/g, '');
-  const {
-    internxtService,
-    hashCache,
-    progressTracker,
-    compressionService,
-    resumableUploader,
-  } = deps;
+  const { internxtService, hashCache, progressTracker, resumableUploader } =
+    deps;
 
   let fileScanner: FileScannerInterface | null = null;
   const uploadedFiles = new Set<string>();
@@ -70,8 +61,6 @@ export function createUploader(
   const handleFileUpload = async (
     fileInfo: FileInfo,
   ): Promise<{ success: boolean; filePath: string }> => {
-    let compressedPath: string | null = null;
-
     try {
       if (uploadedFiles.has(fileInfo.relativePath)) {
         logger.verbose(
@@ -124,30 +113,8 @@ export function createUploader(
         await ensureDirectoryExists(pathInfo.fullDirectoryPath);
       }
 
-      let uploadPath = fileInfo.absolutePath;
-      let finalRemotePath = pathInfo.targetPath;
-
-      if (
-        compressionService &&
-        compressionService.shouldCompress(fileInfo.absolutePath, fileInfo.size)
-      ) {
-        const compressionResult = await compressionService.compressFile(
-          fileInfo.absolutePath,
-        );
-
-        if (compressionResult.success && compressionResult.ratio > 0) {
-          uploadPath = compressionResult.compressedPath;
-          finalRemotePath = compressionService.getCompressedRemotePath(
-            pathInfo.targetPath,
-          );
-          compressedPath = uploadPath;
-
-          logger.verbose(
-            `Compressed ${fileInfo.relativePath}: ${compressionResult.ratio.toFixed(1)}% reduction`,
-            verbosity,
-          );
-        }
-      }
+      const uploadPath = fileInfo.absolutePath;
+      const finalRemotePath = pathInfo.targetPath;
 
       let result;
 
@@ -170,10 +137,6 @@ export function createUploader(
         };
       } else {
         result = await internxtService.uploadFile(uploadPath, finalRemotePath);
-      }
-
-      if (compressedPath && compressionService) {
-        await compressionService.cleanup(compressedPath);
       }
 
       if (result.success) {
@@ -200,10 +163,6 @@ export function createUploader(
         return { success: false, filePath: fileInfo.relativePath };
       }
     } catch (error) {
-      if (compressedPath && compressionService) {
-        await compressionService.cleanup(compressedPath);
-      }
-
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.error(
@@ -277,10 +236,6 @@ export function createUploader(
       if (fileScanner) {
         fileScanner.recordCompletion();
         await fileScanner.saveState();
-      }
-
-      if (compressionService) {
-        await compressionService.cleanupAll();
       }
 
       progressTracker.displaySummary();

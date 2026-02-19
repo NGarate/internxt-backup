@@ -25,8 +25,6 @@ describe('syncFiles', () => {
         quiet: true,
         verbose: false,
         force: true,
-        compress: true,
-        compressionLevel: 9,
         resume: true,
         chunkSize: 100,
       };
@@ -36,8 +34,6 @@ describe('syncFiles', () => {
       expect(options.quiet).toBe(true);
       expect(options.verbose).toBe(false);
       expect(options.force).toBe(true);
-      expect(options.compress).toBe(true);
-      expect(options.compressionLevel).toBe(9);
       expect(options.resume).toBe(true);
       expect(options.chunkSize).toBe(100);
     });
@@ -50,11 +46,9 @@ describe('syncFiles', () => {
     it('should work with partial options', () => {
       const options: SyncOptions = {
         target: '/custom/target',
-        compress: true,
       };
 
       expect(options.target).toBe('/custom/target');
-      expect(options.compress).toBe(true);
     });
   });
 });

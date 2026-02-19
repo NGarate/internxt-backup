@@ -12,8 +12,6 @@ describe('CLI', () => {
         '/source/dir',
         '--target=/backup',
         '--cores=4',
-        '--compress',
-        '--compression-level=9',
         '--force',
         '--resume',
         '--chunk-size=100',
@@ -26,8 +24,6 @@ describe('CLI', () => {
           source: { type: 'string' },
           target: { type: 'string' },
           cores: { type: 'string' },
-          compress: { type: 'boolean' },
-          'compression-level': { type: 'string' },
           force: { type: 'boolean' },
           resume: { type: 'boolean' },
           'chunk-size': { type: 'string' },
@@ -42,8 +38,6 @@ describe('CLI', () => {
       expect(positionals[0]).toBe('/source/dir');
       expect(values.target).toBe('/backup');
       expect(values.cores).toBe('4');
-      expect(values.compress).toBe(true);
-      expect(values['compression-level']).toBe('9');
       expect(values.force).toBe(true);
       expect(values.resume).toBe(true);
       expect(values['chunk-size']).toBe('100');

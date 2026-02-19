@@ -7,7 +7,6 @@
 
 import { it, mock, spyOn as bunSpyOn } from 'bun:test';
 import type { InternxtService } from '../../src/core/internxt/internxt-service';
-import type { CompressionService } from '../../src/core/compression/compression-service';
 import type { ResumableUploader } from '../../src/core/upload/resumable-uploader';
 import type { HashCache } from '../../src/core/upload/hash-cache';
 import type { ProgressTracker } from '../../src/core/upload/progress-tracker';
@@ -103,31 +102,6 @@ export function createMockInternxtService(): InternxtService {
     ),
     fileExists: mock(() => Promise.resolve(false)),
     deleteFile: mock(() => Promise.resolve(true)),
-  };
-}
-
-/**
- * Creates a mock CompressionService matching the factory return type
- */
-export function createMockCompressionService(): CompressionService {
-  return {
-    shouldCompress: mock(() => true),
-    compressFile: mock(() =>
-      Promise.resolve({
-        success: true,
-        originalPath: '/original/path',
-        compressedPath: '/compressed/path.gz',
-        originalSize: 1024,
-        compressedSize: 512,
-        ratio: 50,
-        error: undefined,
-      }),
-    ),
-    compressForUpload: mock(() => Promise.resolve('/compressed/path.gz')),
-    cleanup: mock(() => Promise.resolve()),
-    cleanupAll: mock(() => Promise.resolve()),
-    getCompressedRemotePath: mock((remotePath: string) => `${remotePath}.gz`),
-    isCompressedPath: mock((remotePath: string) => remotePath.endsWith('.gz')),
   };
 }
 
