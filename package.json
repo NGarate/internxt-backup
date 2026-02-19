@@ -35,6 +35,8 @@
     "format:fix": "oxfmt",
     "typecheck": "tsc --noEmit",
     "build": "bun build --minify --target bun --sourcemap=linked ./index.ts --outdir ./dist/bin",
+    "check": "bun run lint && bun run format && bun run typecheck && bun test",
+    "fix": "bun run lint:fix && bun run format:fix",
     "prepublishOnly": "bun test && bun run build"
   },
   "dependencies": {

@@ -67,10 +67,56 @@ The orchestrator (`file-sync.ts`) checks Internxt CLI installation/auth, creates
 
 **Utilities** (`src/utils/`): logger with verbosity levels, filesystem helpers (checksums, file ops), CPU core detection for concurrency defaults.
 
+Services are instantiated inside constructors. Tests replace private service instances directly: `(instance as any).service = mockService`. No DI container.
+
 ## Code Conventions
 
 - Follow Conventional Commits: `feat:`, `fix:`, `perf:`, `docs:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`. Breaking changes use `feat!:` or `BREAKING CHANGE:` footer.
-- Tests are colocated with source files (`.test.ts` suffix). Use `bun:test` imports (`describe`, `it`, `expect`).
-- Files: kebab-case. Classes: PascalCase. Functions/variables: camelCase.
+- Tests are colocated with source files (`.test.ts` suffix). Use `bun:test` imports (`describe`, `it`, `expect`, `spyOn`).
+- Files: kebab-case. Classes: PascalCase. Interfaces: PascalCase. Functions/variables: camelCase.
 - Always use `const`/`let` (never `var`), strict equality (`===`), and curly braces for control structures.
 - KISS: prefer simple solutions first. Clean up after changes — remove dead code, improve readability.
+
+## Verification Commands
+
+After making any changes, run before committing:
+
+```bash
+bun run check        # lint + format + typecheck + tests (mirrors CI)
+bun run fix          # auto-fix lint and formatting issues
+bun test path/to/file.test.ts  # run a single test file
+```
+
+To cut a release when ready (triggers semantic-release → version bump → CHANGELOG → GitHub release → 7-platform build):
+
+```bash
+gh workflow run semantic-release.yml
+```
+
+## Testing Patterns
+
+Mock factories are available in `test-config/mocks/test-helpers.ts` (imported via named exports):
+
+- `createMockInternxtService()` — checkCLI, uploadFile, uploadFileWithProgress, createFolder, listFiles, fileExists, deleteFile
+- `createMockCompressionService()` — shouldCompress, compressFile, compressForUpload, cleanup, cleanupAll
+- `createMockResumableUploader()` — shouldUseResumable, uploadLargeFile, getUploadProgress, canResume, clearState
+- `createMockFileScanner(sourceDir?)` — scan, getFilesToUpload, updateFileHash, updateFileState, saveState
+- `createMockFileInfo(filePath, sourceDir?, needsUpload?)` — full FileInfo with defaults
+- `createMockLoggers()` — verbose, info, success, warning, error, always
+- `createMockFs()` — readFileSync, writeFileSync, existsSync, promises.*
+- `mockProcessOutput()` — capture stdout/stderr in tests (call `.restore()` in afterEach)
+
+The `spyOn` wrapper from test-helpers gracefully handles Bun's accessor property limitation.
+
+`skipIfSpyingIssues(name, fn)` — for tests that may fail due to Bun spyOn limits.
+
+Private service injection pattern: `(instance as any).serviceName = mockService`
+
+## How to Add a New Service
+
+1. Create `src/core/<domain>/<service-name>.ts`
+2. Add interface to `src/interfaces/` if it needs to be mocked
+3. Create `src/core/<domain>/<service-name>.test.ts` colocated
+4. Add `createMock<ServiceName>()` factory to `test-config/mocks/test-helpers.ts` and export from default
+5. Instantiate in the consumer class constructor
+6. Run `bun run check` to verify
