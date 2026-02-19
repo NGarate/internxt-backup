@@ -6,7 +6,7 @@ This file contains essential information for AI coding agents working on the **i
 
 ## Project Overview
 
-**internxt-backup** is a CLI tool for backing up files to Internxt Drive using the Internxt CLI. It provides efficient file synchronization with features like parallel uploads, compression, resumable transfers, and scheduled backups.
+**internxt-backup** is a CLI tool for backing up files to Internxt Drive using the Internxt CLI. It provides efficient file synchronization with features like parallel uploads, resumable transfers, and scheduled backups.
 
 - **Name**: `internxt-backup`
 - **Version**: 0.4.0
@@ -33,7 +33,6 @@ This file contains essential information for AI coding agents working on the **i
 
 **Production:**
 
-- `chalk` (^5.6.2) - Terminal string styling
 - `croner` (^10.0.1) - Cron-based scheduling
 
 **Development:**
@@ -55,9 +54,7 @@ This file contains essential information for AI coding agents working on the **i
 │   ├── file-sync.test.ts         # Sync tests
 │   ├── core/                     # Core business logic
 │   │   ├── file-scanner.ts       # Directory scanning & file discovery
-│   │   ├── compression/          # File compression service
-│   │   │   ├── compression-service.ts
-│   │   │   └── compression-service.test.ts
+│   │   ├── file-scanner.test.ts  # File scanner tests
 │   │   ├── internxt/             # Internxt CLI integration
 │   │   │   ├── internxt-service.ts
 │   │   │   └── internxt-service.test.ts
@@ -66,24 +63,36 @@ This file contains essential information for AI coding agents working on the **i
 │   │   │   └── scheduler.test.ts
 │   │   └── upload/               # Upload management
 │   │       ├── uploader.ts       # Main upload orchestrator
-│   │       ├── file-upload-manager.ts
+│   │       ├── uploader.test.ts  # Uploader tests
 │   │       ├── hash-cache.ts     # File change detection
+│   │       ├── hash-cache.test.ts
 │   │       ├── progress-tracker.ts
+│   │       ├── progress-tracker.test.ts
 │   │       ├── resumable-uploader.ts
-│   │       └── *.test.ts         # Corresponding tests
+│   │       ├── resumable-uploader.test.ts
+│   │       ├── upload-pool.ts    # Parallel upload processing
+│   │       ├── upload-pool.test.ts
+│   │       ├── path-utils.ts     # Path normalization utilities
+│   │       ├── path-utils.test.ts
+│   │       └── directory-optimization.test.ts
 │   ├── interfaces/               # TypeScript interfaces
 │   │   ├── file-scanner.ts
 │   │   ├── internxt.ts
 │   │   └── logger.ts
 │   └── utils/                    # Utility functions
 │       ├── env-utils.ts          # Environment & concurrency helpers
+│       ├── env-utils.test.ts
 │       ├── fs-utils.ts           # Filesystem utilities
+│       ├── fs-utils.test.ts
 │       ├── logger.ts             # Logging with verbosity levels
-│       └── *.test.ts             # Utility tests
+│       ├── logger.test.ts
+│       └── test-logger.ts
 ├── test-config/                  # Test configuration
 │   ├── setup.ts                  # Test preload/setup
 │   ├── mocks/                    # Test mocks
-│   └── test-utils.ts             # Test helpers
+│   ├── integration.test.ts       # Integration tests
+│   ├── README.md                 # Test config documentation
+│   └── tsconfig.test.json        # Test TypeScript config
 ├── .github/                      # GitHub configuration
 │   ├── workflows/                # CI/CD workflows
 │   │   ├── ci.yml                # CI pipeline (lint, test, build)
@@ -247,7 +256,6 @@ All new functionality should include tests. Current coverage includes:
 - CLI argument parsing (`index.test.ts`)
 - File scanning logic
 - Upload management
-- Compression service
 - Hash caching
 - Progress tracking
 - Resumable uploads
@@ -368,7 +376,6 @@ bun publish
 
 4. **File Handling**:
    - Validates file paths before operations
-   - Temporary compression files cleaned up after upload
    - Checks file permissions before reading
 
 ---
@@ -382,7 +389,6 @@ bun publish
 | `src/core/file-scanner.ts`                    | Discovers files, calculates checksums, tracks changes |
 | `src/core/upload/uploader.ts`                 | Upload orchestration, parallel processing             |
 | `src/core/internxt/internxt-service.ts`       | Internxt CLI wrapper and interaction                  |
-| `src/core/compression/compression-service.ts` | Gzip compression with smart skipping                  |
 | `src/core/scheduler/scheduler.ts`             | Cron-based scheduled backups                          |
 | `src/utils/logger.ts`                         | Colored output with verbosity levels                  |
 | `bunfig.toml`                                 | Bun configuration (telemetry off, test preload)       |

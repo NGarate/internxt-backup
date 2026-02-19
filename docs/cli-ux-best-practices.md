@@ -77,13 +77,12 @@ implements:
 
 ### 1.4 Multi-Phase Progress
 
-For workflows with distinct phases (scan → compress → upload → verify), show
+For workflows with distinct phases (scan → upload → verify), show
 which phase is active:
 
 ```
-[1/3] Scanning files...
-[2/3] Compressing 47 files...
-[3/3] Uploading ████████░░░░░░░░ 50% | 24/47
+[1/2] Scanning files...
+[2/2] Uploading ████████░░░░░░░░ 50% | 24/47
 ```
 
 ### 1.5 Elapsed Time & ETA
@@ -139,7 +138,7 @@ static result line.
 | Color    | Usage          | Example                                   |
 | -------- | -------------- | ----------------------------------------- |
 | Red      | Errors         | `❌ Failed to upload file.txt`            |
-| Yellow   | Warnings       | `⚠️ 3 files skipped (already compressed)` |
+| Yellow   | Warnings       | `⚠️ 3 files skipped (unchanged)`          |
 | Green    | Success        | `✅ Backup completed`                     |
 | Blue     | Info/status    | `ℹ️ Starting daemon mode`                 |
 | Dim/gray | Secondary info | Timestamps, file paths in verbose mode    |
@@ -236,7 +235,6 @@ Usage: internxt-backup <source-dir> [options]
 
 Examples:
   internxt-backup /mnt/disk/Photos --target=/Backups/Photos
-  internxt-backup /mnt/disk/Docs --target=/Backups --compress
   internxt-backup /mnt/disk/Data --schedule="0 2 * * *" --daemon
 ```
 
@@ -260,8 +258,8 @@ When run with no arguments, show a concise help message (already implemented).
 When a flag is close to a valid one, suggest the correction:
 
 ```
-Unknown option: --compres
-Did you mean: --compress?
+Unknown option: --schedul
+Did you mean: --schedule?
 ```
 
 ---
@@ -429,7 +427,7 @@ Improvements to consider for `internxt-backup`, ordered by impact:
 - [ ] **Suggest next steps** — After first successful backup, suggest `--schedule` and `--daemon`
 - [ ] **`--json` output mode** — Return structured results for scripting
 - [ ] **Typo suggestions** — Use Levenshtein distance for unknown flags
-- [ ] **Multi-phase labels** — Show `[1/3] Scanning...` → `[2/3] Compressing...` → `[3/3] Uploading...`
+- [ ] **Multi-phase labels** — Show `[1/2] Scanning...` → `[2/2] Uploading...`
 
 ---
 

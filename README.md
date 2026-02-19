@@ -10,7 +10,6 @@ A simple, fast, and efficient tool for backing up files to Internxt Drive using 
 - **Internxt CLI Integration**: Purpose-built wrapper for the Internxt CLI
 - **Efficient file change detection** using checksums
 - **Parallel file uploads** with configurable concurrency
-- **Compression support** to reduce bandwidth (gzip)
 - **Resume capability** for large files
 - **Scheduled backups** with cron expressions
 - **Progress visualization**
@@ -49,8 +48,6 @@ internxt-backup <source-directory> --target=/Backups/Folder
 - `--source=<path>` - Source directory to backup (can also be positional)
 - `--target=<path>` - Target folder in Internxt Drive (default: root)
 - `--cores=<number>` - Number of concurrent uploads (default: 2/3 of CPU cores)
-- `--compress` - Enable gzip compression before upload
-- `--compression-level=<1-9>` - Compression level 1-9 (default: 6)
 - `--schedule=<cron>` - Cron expression for scheduled backups (e.g., "0 2 \* \* \*")
 - `--daemon` - Run as a daemon with scheduled backups
 - `--force` - Force upload all files regardless of hash cache
@@ -67,9 +64,6 @@ internxt-backup <source-directory> --target=/Backups/Folder
 # Basic backup
 internxt-backup /mnt/disk/Photos --target=/Backups/Photos
 
-# With compression
-internxt-backup /mnt/disk/Documents --target=/Backups/Docs --compress
-
 # Scheduled daily at 2 AM
 internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
 
@@ -84,19 +78,10 @@ internxt-backup /mnt/disk/Photos --target=/Backups/Photos --cores=2 --resume
 
 1. The tool checks if Internxt CLI is installed and authenticated
 2. Scans the source directory for files and calculates checksums
-3. Compresses files if enabled (skips already-compressed formats)
-4. Uploads files that have changed since the last run
-5. Uses resumable upload for large files (>100MB) if enabled
-6. Directory structures are created automatically in Internxt Drive
-7. Progress is displayed with a visual progress bar
-
-## Compression
-
-When `--compress` is enabled, files are gzip compressed before upload:
-
-- **Skipped formats**: Images (.jpg, .png), videos (.mp4), archives (.zip, .gz), and more
-- **Minimum size**: Files smaller than 1KB are not compressed
-- **Automatic cleanup**: Temp files are cleaned up after upload
+3. Uploads files that have changed since the last run
+4. Uses resumable upload for large files (>100MB) if enabled
+5. Directory structures are created automatically in Internxt Drive
+6. Progress is displayed with a visual progress bar
 
 ## Resumable Uploads
 
@@ -173,7 +158,7 @@ Releases are fully automated using [semantic-release](https://semantic-release.g
 # Patch release
 git commit -m "fix: resolve memory leak in file upload"
 git commit -m "docs: add troubleshooting guide"
-git commit -m "perf: optimize compression algorithm"
+git commit -m "perf: optimize file scanning algorithm"
 
 # Minor release
 git commit -m "feat: add resume capability for interrupted uploads"
@@ -319,7 +304,7 @@ internxt login
 bun install -g internxt-backup
 
 # 3. Run backup
-internxt-backup /mnt/disk/Share --target=/NAS-Backup --compress --daemon --schedule="0 3 * * *"
+internxt-backup /mnt/disk/Share --target=/NAS-Backup --daemon --schedule="0 3 * * *"
 ```
 
 ## Migration from WebDAV

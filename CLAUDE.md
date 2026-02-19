@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**internxt-backup** is a CLI tool for backing up files to Internxt Drive via the Internxt CLI. It handles parallel uploads, gzip compression, resumable transfers, hash-based change detection, and cron-scheduled backups.
+**internxt-backup** is a CLI tool for backing up files to Internxt Drive via the Internxt CLI. It handles parallel uploads, resumable transfers, hash-based change detection, and cron-scheduled backups.
 
 - **Runtime:** Bun (>=1.3.8), ESM modules
 - **Language:** TypeScript (strict mode)
@@ -56,11 +56,10 @@ The orchestrator (`file-sync.ts`) checks Internxt CLI installation/auth, creates
 - `internxt/internxt-service.ts` — wraps Internxt CLI commands (upload, mkdir, list-files) via shell exec
 - `file-scanner.ts` — scans directories, calculates MD5 checksums, detects changes against cached state
 - `upload/uploader.ts` — upload orchestrator that coordinates the services below
-- `upload/file-upload-manager.ts` — concurrent upload queue with configurable max parallelism
+- `upload/upload-pool.ts` — concurrent upload queue with configurable max parallelism
 - `upload/hash-cache.ts` — persists file hashes to `tmpdir/internxt-backup-hash-cache.json` for change detection
 - `upload/resumable-uploader.ts` — chunked uploads for large files with resume capability
 - `upload/progress-tracker.ts` — tracks and displays upload progress
-- `compression/compression-service.ts` — gzip compression, auto-skips already-compressed formats (jpg, png, mp4, zip, etc.)
 - `scheduler/scheduler.ts` — cron scheduling via croner, prevents overlapping executions
 
 **Interfaces** (`src/interfaces/`): `FileInfo`, `ScanResult`, `FileScannerInterface`, Internxt CLI result types, `Verbosity` enum (Quiet/Normal/Verbose).
@@ -98,7 +97,6 @@ gh workflow run semantic-release.yml
 Mock factories are available in `test-config/mocks/test-helpers.ts` (imported via named exports):
 
 - `createMockInternxtService()` — checkCLI, uploadFile, uploadFileWithProgress, createFolder, listFiles, fileExists, deleteFile
-- `createMockCompressionService()` — shouldCompress, compressFile, compressForUpload, cleanup, cleanupAll
 - `createMockResumableUploader()` — shouldUseResumable, uploadLargeFile, getUploadProgress, canResume, clearState
 - `createMockFileScanner(sourceDir?)` — scan, getFilesToUpload, updateFileHash, updateFileState, saveState
 - `createMockFileInfo(filePath, sourceDir?, needsUpload?)` — full FileInfo with defaults

@@ -86,7 +86,7 @@ BREAKING CHANGE: The --webdav-url option has been removed. Use --target instead.
 git commit -m "fix: resolve memory leak in file upload"
 
 # Performance improvement
-git commit -m "perf: optimize compression algorithm by 30%"
+git commit -m "perf: optimize file scanning by 30%"
 
 # Documentation update
 git commit -m "docs: add troubleshooting guide for Docker"
@@ -95,7 +95,7 @@ git commit -m "docs: add troubleshooting guide for Docker"
 git commit -m "style: format with consistent indentation"
 
 # Test improvement
-git commit -m "test: add tests for compression module"
+git commit -m "test: add tests for upload module"
 
 # Chore/maintenance
 git commit -m "chore: update dependencies to latest patch versions"
