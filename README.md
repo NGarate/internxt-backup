@@ -19,7 +19,7 @@ A simple, fast, and efficient tool for backing up files to Internxt Drive using 
 
 ## Requirements
 
-- [Bun](https://bun.sh/) runtime ≥ 1.3.8
+- [Bun](https://bun.sh/) runtime ≥ 1.3.9
 - [Internxt CLI](https://github.com/internxt/cli) installed and authenticated
 
 ## Installation
@@ -187,7 +187,7 @@ Download from [GitHub Releases](https://github.com/ngarate/internxt-backup/relea
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) runtime ≥ 1.3.8
+- [Bun](https://bun.sh/) runtime ≥ 1.3.9
 - Git
 
 ### Setup

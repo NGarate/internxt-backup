@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **internxt-backup** is a CLI tool for backing up files to Internxt Drive via the Internxt CLI. It handles parallel uploads, resumable transfers, hash-based change detection, and cron-scheduled backups.
 
-- **Runtime:** Bun (>=1.3.8), ESM modules
+- **Runtime:** Bun (>=1.3.9), ESM modules
 - **Language:** TypeScript (strict mode)
 - **Path alias:** `#src/*` maps to `./src/*`
 
@@ -98,7 +98,7 @@ bun run build        # build artifact validation
 
 ### Typecheck CI Debug
 
-- CI runs on Bun `1.3.8`, so callback typings can differ from newer local Bun toolchains.
+- CI runs on Bun `1.3.9`, so callback typings can differ from newer local Bun toolchains.
 - If a CI typecheck fails but local checks pass, inspect the exact CI error with:
 
 ```bash
