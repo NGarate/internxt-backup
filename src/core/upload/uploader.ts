@@ -6,6 +6,7 @@ import { HashCache } from './hash-cache';
 import { ProgressTracker } from './progress-tracker';
 import { processUploads } from './upload-pool';
 import { normalizePathInfo } from './path-utils';
+import { processPool } from '../pool/work-pool';
 
 export interface UploaderOptions {
   resume?: boolean;
@@ -32,6 +33,9 @@ export function createUploader(
   let fileScanner: FileScannerInterface | null = null;
   const uploadedFiles = new Set<string>();
   const createdDirectories = new Set<string>();
+  const inFlightDirectoryCreations = new Map<string, Promise<boolean>>();
+  let isBatchUploading = false;
+  let hashCacheDirty = false;
 
   const setFileScanner = (scanner: FileScannerInterface): void => {
     fileScanner = scanner;
@@ -51,11 +55,39 @@ export function createUploader(
       return true;
     }
 
-    const result = await internxtService.createFolder(directory);
-    if (result.success) {
-      createdDirectories.add(directory);
+    const inFlightCreation = inFlightDirectoryCreations.get(directory);
+    if (inFlightCreation) {
+      return inFlightCreation;
     }
-    return result.success;
+
+    const createPromise = internxtService
+      .createFolder(directory)
+      .then((result) => {
+        if (result.success) {
+          createdDirectories.add(directory);
+        }
+        return result.success;
+      })
+      .finally(() => {
+        inFlightDirectoryCreations.delete(directory);
+      });
+
+    inFlightDirectoryCreations.set(directory, createPromise);
+    return createPromise;
+  };
+
+  const flushHashCache = async (): Promise<void> => {
+    if (!hashCacheDirty) {
+      return;
+    }
+
+    const saved = await hashCache.save();
+    if (saved) {
+      hashCacheDirty = false;
+      return;
+    }
+
+    logger.error('Failed to persist hash cache; changes will be retried.');
   };
 
   const handleFileUpload = async (
@@ -151,7 +183,10 @@ export function createUploader(
         }
 
         hashCache.updateHash(fileInfo.absolutePath, fileInfo.checksum);
-        await hashCache.save();
+        hashCacheDirty = true;
+        if (!isBatchUploading) {
+          await flushHashCache();
+        }
 
         progressTracker.recordSuccess();
         return { success: true, filePath: fileInfo.relativePath };
@@ -175,6 +210,11 @@ export function createUploader(
 
   const startUpload = async (filesToUpload: FileInfo[]): Promise<void> => {
     await hashCache.load();
+    hashCacheDirty = false;
+    uploadedFiles.clear();
+    createdDirectories.clear();
+    inFlightDirectoryCreations.clear();
+    isBatchUploading = true;
 
     const cliStatus = await internxtService.checkCLI();
     if (!cliStatus.installed || !cliStatus.authenticated) {
@@ -182,6 +222,7 @@ export function createUploader(
       if (cliStatus.error) {
         logger.error(cliStatus.error);
       }
+      isBatchUploading = false;
       return;
     }
 
@@ -195,11 +236,9 @@ export function createUploader(
 
     if (filesToUpload.length === 0) {
       logger.success('All files are up to date.', verbosity);
+      isBatchUploading = false;
       return;
     }
-
-    uploadedFiles.clear();
-    createdDirectories.clear();
 
     // Pre-create unique directories
     if (filesToUpload.length > 1) {
@@ -216,22 +255,20 @@ export function createUploader(
         `Pre-creating ${uniqueDirs.length} unique directories...`,
         verbosity,
       );
-      for (const dir of uniqueDirs) {
-        await ensureDirectoryExists(dir);
-      }
+      await processPool(uniqueDirs, ensureDirectoryExists, maxConcurrency);
     }
 
     logger.info(
       `Starting parallel upload with ${maxConcurrency} concurrent uploads...`,
       verbosity,
     );
-    await new Promise((resolve) => setTimeout(resolve, 50));
 
     progressTracker.initialize(filesToUpload.length);
     progressTracker.startProgressUpdates();
 
     try {
       await processUploads(filesToUpload, handleFileUpload, maxConcurrency);
+      await flushHashCache();
 
       if (fileScanner) {
         fileScanner.recordCompletion();
@@ -243,12 +280,14 @@ export function createUploader(
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.error(`\nUpload process failed: ${errorMessage}`);
+      await flushHashCache();
 
       if (fileScanner) {
         await fileScanner.saveState();
       }
     } finally {
       progressTracker.stopProgressUpdates();
+      isBatchUploading = false;
     }
   };
 

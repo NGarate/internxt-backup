@@ -1,27 +1,32 @@
-async function* itemIterator<T>(items: T[]): AsyncGenerator<T> {
-  for (const item of items) {
-    yield item;
-  }
-}
-
-async function processWorker<T>(
-  iterator: AsyncGenerator<T>,
-  handler: (item: T) => Promise<unknown>,
-): Promise<void> {
-  for await (const item of iterator) {
-    await handler(item);
-  }
-}
-
 export async function processPool<T>(
   items: T[],
   handler: (item: T) => Promise<unknown>,
   maxConcurrency: number,
 ): Promise<void> {
-  const iterator = itemIterator(items);
-  const workers = Array.from(
-    { length: Math.min(maxConcurrency, items.length) },
-    () => processWorker(iterator, handler),
-  );
-  await Promise.allSettled(workers);
+  if (items.length === 0) {
+    return;
+  }
+
+  const requestedConcurrency = Number.isFinite(maxConcurrency)
+    ? Math.floor(maxConcurrency)
+    : 1;
+  const concurrency = Math.max(1, Math.min(requestedConcurrency, items.length));
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const currentIndex = nextIndex++;
+      if (currentIndex >= items.length) {
+        return;
+      }
+
+      try {
+        await handler(items[currentIndex]);
+      } catch {
+        // Keep processing remaining items, matching existing behavior.
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 }

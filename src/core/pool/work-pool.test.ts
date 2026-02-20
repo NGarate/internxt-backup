@@ -60,4 +60,18 @@ describe('processPool', () => {
 
     expect(processed).toContain(1);
   });
+
+  it('should fallback to one worker for invalid concurrency', async () => {
+    const processed: number[] = [];
+
+    await processPool(
+      [1, 2, 3],
+      async (item) => {
+        processed.push(item);
+      },
+      0,
+    );
+
+    expect(processed.sort()).toEqual([1, 2, 3]);
+  });
 });

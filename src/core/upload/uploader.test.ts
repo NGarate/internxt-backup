@@ -149,6 +149,19 @@ describe('createUploader', () => {
       expect(mockInternxtService.uploadFile).toHaveBeenCalled();
     });
 
+    it('should persist hash cache once at end of batch upload', async () => {
+      const uploader = makeUploader();
+      const files = [
+        createMockFileInfo('source/file1.txt'),
+        createMockFileInfo('source/file2.txt'),
+        createMockFileInfo('source/file3.txt'),
+      ];
+
+      await uploader.startUpload(files);
+
+      expect(mockHashCache.save).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle CLI not ready', async () => {
       const noCLIService = createMockInternxtService();
       noCLIService.checkCLI = mock(() =>
@@ -212,6 +225,25 @@ describe('createUploader', () => {
       await uploader.handleFileUpload(fileInfo);
 
       expect(callOrder).toEqual(['updateHash', 'save']);
+    });
+
+    it('should keep cache dirty and retry save after a failed flush', async () => {
+      let saveCalls = 0;
+      mockHashCache.save = mock(() => {
+        saveCalls++;
+        return Promise.resolve(saveCalls > 1);
+      });
+
+      const uploader = makeUploader();
+      const firstFile = createMockFileInfo('source/file1.txt');
+      const secondFile = createMockFileInfo('source/file2.txt');
+
+      const firstResult = await uploader.handleFileUpload(firstFile);
+      const secondResult = await uploader.handleFileUpload(secondFile);
+
+      expect(firstResult.success).toBe(true);
+      expect(secondResult.success).toBe(true);
+      expect(saveCalls).toBe(2);
     });
 
     it('should NOT record hash when upload fails', async () => {
