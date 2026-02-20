@@ -27,6 +27,10 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Default to least privilege; elevate only jobs that update releases.
+permissions:
+  contents: read
+
 jobs:
   # Determine the release tag to build
   prepare:
@@ -155,6 +159,8 @@ jobs:
     if: needs.prepare.outputs.should_build == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -239,6 +245,8 @@ jobs:
     needs: [prepare, build-and-release]
     if: needs.prepare.outputs.should_build == 'true'
     timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
