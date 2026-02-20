@@ -10,5 +10,11 @@
   "arrowParens": "always",
   "endOfLine": "lf",
   "insertFinalNewline": true,
-  "ignorePatterns": ["dist/", "node_modules/", "bun.lock", "CLAUDE.md"]
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "bun.lock",
+    "CLAUDE.md",
+    "CHANGELOG.md"
+  ]
 }
