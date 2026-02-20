@@ -46,6 +46,11 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
       # Note: GITHUB_TOKEN is used here which means tag push events won't trigger
       # other workflows directly. The build-release-assets.yml workflow uses workflow_run trigger
       # to detect when this workflow completes and then builds the release assets.
