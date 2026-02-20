@@ -1,0 +1,30 @@
+name: Setup Bun and Install Dependencies
+description: Setup Bun, restore/save dependency cache, and install project dependencies.
+
+inputs:
+  bun-version:
+    description: Bun version to install.
+    required: true
+  cache-prefix:
+    description: Prefix for dependency cache keys.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2.1.2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Cache dependencies
+      uses: actions/cache@v5.0.3
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ inputs.cache-prefix }}-${{ hashFiles('**/bun.lock') }}
+        restore-keys: |
+          ${{ inputs.cache-prefix }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile

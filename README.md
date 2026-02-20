@@ -116,6 +116,7 @@ Common cron patterns:
 ## CI/CD
 
 This project uses **GitHub Actions** for continuous integration and deployment with automated semantic versioning.
+Workflows are **Bun-first**. `Node.js 24.x` is only configured where required for `semantic-release`.
 
 ### Workflow Overview
 
@@ -135,8 +136,10 @@ master branch (protected)
                 ├── Generate CHANGELOG.md
                 ├── Create Git tag (vX.Y.Z)
                 └── Trigger Build Release Assets workflow
-                    └── Build cross-platform executables
-                        └── Upload to GitHub Release
+                    ├── Validate release once (tests)
+                    └── Build cross-platform executables (matrix)
+                        ├── Upload assets to GitHub Release
+                        └── Update release notes from CHANGELOG
 ```
 
 ### Automated Release Process
@@ -187,7 +190,7 @@ gh workflow run create-release-metadata.yml --ref master
 ```
 
 6. Wait for `Create Release Metadata` to finish.
-7. If a release is created, `Build Release Assets` starts automatically and builds all platform binaries.
+7. If a release is created, `Build Release Assets` starts automatically, validates once, then builds all platform binaries in matrix jobs.
 8. Verify the GitHub Release has:
 
 - a new tag like `vX.Y.Z`
@@ -225,9 +228,9 @@ bun run release:trigger -- develop
 1. `Create Release Metadata` runs `semantic-release`, analyzes commits, and decides whether a new version is needed.
 2. If no releasable commit exists, the flow stops with no new tag/release.
 3. If a release is needed, semantic-release creates the tag and release metadata.
-4. `Build Release Assets` is triggered via `workflow_run`, resolves the new tag, and builds binaries in a multi-OS matrix.
-5. Built artifacts are uploaded to the same GitHub Release.
-6. Release notes are then updated with the matching `CHANGELOG.md` entry and install instructions.
+4. `Build Release Assets` is triggered via `workflow_run`, resolves the new tag, and runs a single validation test job.
+5. Multi-OS matrix jobs build binaries and upload artifacts to the same GitHub Release.
+6. Release notes are updated with the matching `CHANGELOG.md` entry and install instructions.
 
 ### Download Pre-built Executables
 
@@ -298,12 +301,14 @@ bun run release:trigger
 ```
 .
 ├── .github/
+│   ├── actions/
+│   │   └── setup-bun-install/   # Reusable Bun setup + cache + install action
 │   ├── workflows/
 │   │   ├── ci.yml              # CI pipeline
 │   │   ├── build-release-assets.yml    # Release builds
 │   │   └── create-release-metadata.yml # Automated versioning
 │   ├── dependabot.yml          # Automated dependency updates
-│   └── oxlintrc.json          # Linting rules
+│   └── CONTRIBUTING.md         # Contribution guidelines
 ├── scripts/
 │   └── trigger-release.sh      # Interactive release trigger helper
 ├── src/                       # Source modules

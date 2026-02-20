@@ -3,6 +3,9 @@ name: Create Release Metadata
 on:
   workflow_dispatch:
 
+env:
+  BUN_VERSION: '1.3.9'
+
 concurrency:
   group: semantic-release
   cancel-in-progress: false
@@ -24,21 +27,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2.1.2
+      - name: Setup Bun environment
+        uses: ./.github/actions/setup-bun-install
         with:
-          bun-version: '1.3.9'
-
-      - name: Cache dependencies
-        uses: actions/cache@v5.0.3
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          bun-version: ${{ env.BUN_VERSION }}
+          cache-prefix: ${{ runner.os }}-bun
 
       - name: Run tests
         run: bun test
