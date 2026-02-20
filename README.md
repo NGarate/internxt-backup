@@ -164,7 +164,7 @@ git commit -m "perf: optimize file scanning algorithm"
 git commit -m "feat: add resume capability for interrupted uploads"
 
 # Major release (breaking change)
-git commit -m "feat!: drop support for Node.js 14"
+git commit -m "feat!: drop support for Node.js 24"
 # OR
 git commit -m "feat: redesign configuration format
 

@@ -126,7 +126,7 @@ git commit -m "feat!: remove support for legacy config format"
 # Breaking change with footer
 git commit -m "feat: migrate to ESM modules
 
-BREAKING CHANGE: This package now requires Node.js 16+ and uses
+BREAKING CHANGE: This package now requires Node.js 24+ and uses
 ESM modules. CommonJS require() is no longer supported."
 
 # Multiple breaking changes
