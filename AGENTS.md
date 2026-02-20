@@ -86,7 +86,7 @@ bun run fix          # auto-fix lint and formatting issues
 bun test path/to/file.test.ts  # run a single test file
 ```
 
-If CI fails, run the same checks individually to isolate the failing stage:
+Always run the same checks individually locally (not only when CI fails) to mirror the CI stages and catch issues before pushing:
 
 ```bash
 bun run lint         # oxlint

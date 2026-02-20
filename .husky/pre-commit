@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+bun run lint
+bun run format
+bun run typecheck

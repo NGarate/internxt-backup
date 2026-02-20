@@ -189,6 +189,7 @@ gh workflow run create-release-metadata.yml --ref master
 6. Wait for `Create Release Metadata` to finish.
 7. If a release is created, `Build Release Assets` starts automatically and builds all platform binaries.
 8. Verify the GitHub Release has:
+
 - a new tag like `vX.Y.Z`
 - uploaded platform assets (`.tar.gz` / `.zip` / `.exe`)
 - updated release notes from `CHANGELOG.md`
