@@ -78,22 +78,16 @@ Services are instantiated inside constructors. Tests replace private service ins
 
 ## Verification Commands
 
-After making any changes, run before committing:
+After making any changes, run locally before committing:
 
 ```bash
-bun run check        # lint + format + typecheck + tests (mirrors CI)
-bun run fix          # auto-fix lint and formatting issues
-bun test path/to/file.test.ts  # run a single test file
-```
-
-Always run the same checks individually locally (not only when CI fails) to mirror the CI stages and catch issues before pushing:
-
-```bash
+bun run fix          # optional: auto-fix lint/format issues
 bun run lint         # oxlint
 bun run format       # oxfmt --check
 bun run typecheck    # tsc --noEmit
 bun test             # full test suite
 bun run build        # build artifact validation
+bun test path/to/file.test.ts  # optional: run a single test file while iterating
 ```
 
 ### Typecheck CI Debug
