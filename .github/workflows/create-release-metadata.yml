@@ -11,8 +11,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci:
+    name: Run CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   release:
     name: Create Release Metadata
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -33,9 +39,6 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           cache-prefix: ${{ runner.os }}-bun
 
-      - name: Run tests
-        run: bun test
-
       - name: Build
         run: bun run build
 
@@ -50,6 +53,7 @@ jobs:
       - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HUSKY: 0
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
           GIT_COMMITTER_NAME: github-actions[bot]
