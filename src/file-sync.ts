@@ -164,6 +164,13 @@ export async function syncFiles(
         logger.info('Syncing deletions to remote...', verbosity);
         const targetDir = options.target || '/';
         for (const relativePath of deletedFiles) {
+          if (relativePath.split('/').some((part) => part === '..')) {
+            logger.warning(
+              `Path traversal blocked in deletion: ${relativePath}`,
+              verbosity,
+            );
+            continue;
+          }
           const remotePath =
             targetDir === '/'
               ? `/${relativePath}`

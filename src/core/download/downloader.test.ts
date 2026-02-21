@@ -95,4 +95,30 @@ describe('Downloader', () => {
 
     expect(mockProgress.initialize).not.toHaveBeenCalled();
   });
+
+  it('should block path traversal attempts', async () => {
+    const downloader = createDownloader(
+      1,
+      '/Backups',
+      '/tmp/restore',
+      0,
+      { internxtService: mockInternxt, progressTracker: mockProgress },
+      { verify: false },
+    );
+
+    const files: RemoteFileEntry[] = [
+      {
+        uuid: 'uuid-evil',
+        name: 'passwd',
+        remotePath: '/Backups/../../etc/passwd',
+        size: 100,
+        isFolder: false,
+      },
+    ];
+
+    await downloader.startDownload(files);
+
+    expect(mockInternxt.downloadFile).not.toHaveBeenCalled();
+    expect(downloader.getStats().failedCount).toBe(1);
+  });
 });

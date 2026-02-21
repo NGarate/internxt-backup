@@ -58,4 +58,30 @@ describe('normalizePathInfo', () => {
     expect(result.fullDirectoryPath).toBe('/target/a/b/c/d');
     expect(result.targetPath).toBe('/target/a/b/c/d/file.txt');
   });
+
+  describe('path traversal protection', () => {
+    it('should throw on .. in relative path', () => {
+      expect(() => normalizePathInfo('../../etc/passwd', '/Backups')).toThrow(
+        'Path traversal detected',
+      );
+    });
+
+    it('should throw on .. embedded in path segment', () => {
+      expect(() =>
+        normalizePathInfo('foo/../../../etc/passwd', '/Backups'),
+      ).toThrow('Path traversal detected');
+    });
+
+    it('should throw on Windows-style traversal', () => {
+      expect(() =>
+        normalizePathInfo('foo\\..\\..\\etc\\passwd', '/Backups'),
+      ).toThrow('Path traversal detected');
+    });
+
+    it('should allow normal paths without ..', () => {
+      expect(() =>
+        normalizePathInfo('foo/bar/baz.txt', '/Backups'),
+      ).not.toThrow();
+    });
+  });
 });

@@ -35,6 +35,8 @@ export function createDownloader(
   let verifiedCount = 0;
   let verifyFailedCount = 0;
 
+  const resolvedTarget = path.resolve(targetLocalPath);
+
   const handleFileDownload = async (
     entry: RemoteFileEntry,
   ): Promise<DownloadResult> => {
@@ -43,6 +45,26 @@ export function createDownloader(
       const relativePath = entry.remotePath
         .replace(sourcePrefix, '')
         .replace(/^\//, '');
+
+      const resolvedLocalFile = path.resolve(
+        targetLocalPath,
+        relativePath,
+        entry.name,
+      );
+      if (
+        !resolvedLocalFile.startsWith(resolvedTarget + path.sep) &&
+        resolvedLocalFile !== resolvedTarget
+      ) {
+        failedCount++;
+        progressTracker.recordFailure();
+        return {
+          success: false,
+          remotePath: entry.remotePath,
+          localPath: '',
+          error: `Path traversal blocked: ${entry.remotePath}`,
+        };
+      }
+
       const localDir = path.join(targetLocalPath, path.dirname(relativePath));
 
       if (!fs.existsSync(localDir)) {

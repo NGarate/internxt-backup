@@ -10,6 +10,10 @@ export function normalizePathInfo(
   targetDir: string,
 ): PathInfo {
   const normalizedPath = relativePath.replace(/\\/g, '/');
+
+  if (normalizedPath.split('/').some((part) => part === '..')) {
+    throw new Error(`Path traversal detected: ${relativePath}`);
+  }
   const lastSlashIndex = normalizedPath.lastIndexOf('/');
   const directory =
     lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
