@@ -11,6 +11,7 @@ export const existsAsync = fs.promises.access;
 export const mkdirAsync = fs.promises.mkdir;
 export const readFileAsync = fs.promises.readFile;
 export const writeFileAsync = fs.promises.writeFile;
+export const chmodAsync = fs.promises.chmod;
 
 /**
  * URL encode path components
@@ -55,6 +56,7 @@ export async function saveJsonToFile<T>(
 ): Promise<boolean> {
   try {
     await writeFileAsync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    await chmodAsync(filePath, 0o600);
     return true;
   } catch (error) {
     console.error(`Error saving JSON to ${filePath}:`, error);

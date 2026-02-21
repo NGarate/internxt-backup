@@ -48,6 +48,7 @@ export function createHashCache(
     try {
       const obj = Object.fromEntries(cache);
       await fs.promises.writeFile(cachePath, JSON.stringify(obj, null, 2));
+      await fs.promises.chmod(cachePath, 0o600);
       logVerbose(`Saved hash cache to ${cachePath}`, verbosity);
       return true;
     } catch (error) {

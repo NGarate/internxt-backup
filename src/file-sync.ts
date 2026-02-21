@@ -1,5 +1,4 @@
 import path from 'path';
-import os from 'os';
 import { getOptimalConcurrency } from './utils/env-utils';
 import * as logger from './utils/logger';
 import { Verbosity } from './interfaces/logger';
@@ -10,6 +9,7 @@ import { createHashCache } from './core/upload/hash-cache';
 import { createProgressTracker } from './core/upload/progress-tracker';
 import { createResumableUploader } from './core/upload/resumable-uploader';
 import { createBackupState } from './core/backup/backup-state';
+import { getStateDir } from './utils/state-dir';
 
 export interface SyncOptions {
   cores?: number;
@@ -87,7 +87,7 @@ export async function syncFiles(
     const concurrentUploads = resolveConcurrency(options.cores);
 
     const hashCache = makeHashCache(
-      path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
+      path.join(getStateDir(), 'internxt-backup-hash-cache.json'),
       verbosity,
     );
     const progressTracker = makeProgressTracker(verbosity);

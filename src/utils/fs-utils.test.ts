@@ -93,6 +93,9 @@ describe('File System Utilities', () => {
           fsUtils,
           'writeFileAsync',
         ).mockImplementation(() => Promise.resolve());
+        const chmodSpy = spyOn(fsUtils, 'chmodAsync').mockImplementation(() =>
+          Promise.resolve(),
+        );
 
         const testData = { key: 'value', nested: { prop: 123 } };
         const result = await fsUtils.saveJsonToFile(
@@ -106,7 +109,9 @@ describe('File System Utilities', () => {
           JSON.stringify(testData, null, 2),
           'utf8',
         );
+        expect(chmodSpy).toHaveBeenCalledWith('/test/data.json', 0o600);
         writeFileSpy.mockRestore();
+        chmodSpy.mockRestore();
       });
 
       it('should return false and log error on write failure', async () => {

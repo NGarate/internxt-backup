@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import os from 'os';
 import * as logger from '../utils/logger';
 import {
   calculateChecksum,
   loadJsonFromFile,
   saveJsonToFile,
 } from '../utils/fs-utils';
+import { getStateDir } from '../utils/state-dir';
 import { createHashCache } from './upload/hash-cache';
 import { FileInfo, ScanResult, UploadState } from '../interfaces/file-scanner';
 
@@ -16,10 +16,11 @@ export function createFileScanner(
   forceUpload: boolean = false,
 ) {
   const resolvedDir = path.resolve(sourceDir);
-  const statePath = path.join(os.tmpdir(), 'internxt-backup-state.json');
+  const stateDir = getStateDir();
+  const statePath = path.join(stateDir, 'internxt-backup-state.json');
   let uploadState: UploadState = { files: {}, lastRun: '' };
   const hashCache = createHashCache(
-    path.join(os.tmpdir(), 'internxt-backup-hash-cache.json'),
+    path.join(stateDir, 'internxt-backup-hash-cache.json'),
     verbosity,
   );
 

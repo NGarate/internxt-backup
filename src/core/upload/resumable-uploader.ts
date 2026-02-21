@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { readFile, writeFile, unlink, chmod } from 'node:fs/promises';
 import { join, basename } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import * as logger from '../../utils/logger';
+import { getStateDir } from '../../utils/state-dir';
 import { InternxtService } from '../internxt/internxt-service';
 import { ChunkedUploadState } from '../../interfaces/internxt';
 
@@ -30,12 +30,13 @@ export function createResumableUploader(
   options: ResumableUploadOptions = {},
 ) {
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
-  const resumeDir = options.resumeDir ?? join(tmpdir(), 'internxt-uploads');
+  const resumeDir =
+    options.resumeDir ?? join(getStateDir(), 'internxt-uploads');
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
   const retryDelayMs = options.retryDelayMs;
 
   if (!existsSync(resumeDir)) {
-    mkdirSync(resumeDir, { recursive: true });
+    mkdirSync(resumeDir, { recursive: true, mode: 0o700 });
   }
 
   const calculateChecksum = async (filePath: string): Promise<string> => {
@@ -92,6 +93,7 @@ export function createResumableUploader(
     const statePath = getStateFilePath(state.filePath);
     try {
       await writeFile(statePath, JSON.stringify(state, null, 2));
+      await chmod(statePath, 0o600);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

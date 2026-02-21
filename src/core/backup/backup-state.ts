@@ -1,7 +1,7 @@
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { loadJsonFromFile, saveJsonToFile } from '../../utils/fs-utils';
+import { getStateDir } from '../../utils/state-dir';
 import {
   BaselineSnapshot,
   FileMetadata,
@@ -10,15 +10,18 @@ import {
 import { InternxtService } from '../internxt/internxt-service';
 import * as logger from '../../utils/logger';
 
-const BASELINE_PATH = path.join(os.tmpdir(), 'internxt-backup-baseline.json');
 const MANIFEST_FILENAME = '.internxt-backup-meta.json';
 
 export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
+  const baselinePath = path.join(
+    getStateDir(),
+    'internxt-backup-baseline.json',
+  );
   let baseline: BaselineSnapshot | null = null;
 
   const loadBaseline = async (): Promise<BaselineSnapshot | null> => {
     baseline = await loadJsonFromFile<BaselineSnapshot | null>(
-      BASELINE_PATH,
+      baselinePath,
       null,
     );
     if (baseline) {
@@ -32,7 +35,7 @@ export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
 
   const saveBaseline = async (snapshot: BaselineSnapshot): Promise<void> => {
     baseline = snapshot;
-    await saveJsonToFile(BASELINE_PATH, snapshot);
+    await saveJsonToFile(baselinePath, snapshot);
     logger.verbose(
       `Saved baseline with ${Object.keys(snapshot.files).length} files`,
       verbosity,
@@ -97,7 +100,7 @@ export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
       return false;
     }
 
-    const tmpManifest = path.join(os.tmpdir(), MANIFEST_FILENAME);
+    const tmpManifest = path.join(getStateDir(), MANIFEST_FILENAME);
     await saveJsonToFile(tmpManifest, baseline);
 
     const remotePath =
@@ -140,7 +143,7 @@ export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
       return null;
     }
 
-    const tmpDir = path.join(os.tmpdir(), 'internxt-backup-restore');
+    const tmpDir = path.join(getStateDir(), 'internxt-backup-restore');
     fs.mkdirSync(tmpDir, { recursive: true });
 
     const downloadResult = await internxtService.downloadFile(
