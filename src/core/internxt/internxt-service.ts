@@ -12,10 +12,11 @@ import {
 } from '../../interfaces/internxt';
 import { RemoteFileEntry } from '../../interfaces/download';
 
-const execAsync = promisify(exec);
+const defaultExecAsync = promisify(exec);
 
 export function createInternxtService(options: InternxtServiceOptions = {}) {
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
+  const execAsync = options.execFn ?? defaultExecAsync;
   let rootFolderUuid: string | null = null;
   const folderUuidCache = new Map<string, string>();
 

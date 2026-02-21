@@ -41,6 +41,7 @@ export interface InternxtFileInfo {
 
 export interface InternxtServiceOptions {
   verbosity?: number;
+  execFn?: (cmd: string) => Promise<{ stdout: string; stderr: string }>;
 }
 
 export interface UploadProgress {
