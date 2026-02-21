@@ -15,7 +15,7 @@ export function createHashCache(
 
   const calculateHash = async (filePath: string): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const hash = crypto.createHash('md5');
+      const hash = crypto.createHash('sha256');
       const stream = fs.createReadStream(filePath);
 
       stream.on('error', reject);

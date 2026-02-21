@@ -30,13 +30,13 @@ export function urlEncodePath(pathToEncode: string): string {
 }
 
 /**
- * Calculate MD5 checksum for a file
+ * Calculate SHA-256 checksum for a file
  * @param {string} filePath - Path to the file
- * @returns {Promise<string>} The MD5 checksum
+ * @returns {Promise<string>} The SHA-256 checksum
  */
 export async function calculateChecksum(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('md5');
+    const hash = crypto.createHash('sha256');
     const stream = fs.createReadStream(filePath);
 
     stream.on('data', (data) => hash.update(data));

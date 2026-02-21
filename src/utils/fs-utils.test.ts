@@ -62,7 +62,7 @@ describe('File System Utilities', () => {
 
   // Test checksum calculation
   describe('calculateChecksum', () => {
-    it('should calculate MD5 checksum for file', async () => {
+    it('should calculate SHA-256 checksum for file', async () => {
       // Mock the calculateChecksum function
       const mockChecksum = spyOn(
         fsUtils,
