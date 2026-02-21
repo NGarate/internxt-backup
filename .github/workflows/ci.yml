@@ -49,5 +49,20 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           cache-prefix: ${{ runner.os }}-bun
-      - name: Run tests
-        run: bun test --coverage --coverage-reporter=lcov
+      - name: Run tests with coverage
+        shell: bash
+        run: |
+          set -eo pipefail
+          bun test --coverage --coverage-reporter=lcov 2>&1 | tee /tmp/coverage-output.txt
+      - name: Enforce 70% line coverage threshold
+        shell: bash
+        run: |
+          LINE_COV=$(awk -F'|' '/^All files/{gsub(/ /,"",$3); print $3}' /tmp/coverage-output.txt)
+          echo "Line coverage: ${LINE_COV:-unknown}%"
+          awk -v c="${LINE_COV:-0}" 'BEGIN {
+            if (c+0 < 70) {
+              print "FAIL: " c "% line coverage is below the 70% threshold"
+              exit 1
+            }
+            print "PASS: " c "% line coverage meets the >= 70% threshold"
+          }'
