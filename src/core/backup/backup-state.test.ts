@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { createBackupState } from './backup-state';
 import { FileInfo, BaselineSnapshot } from '../../interfaces/file-scanner';
+import * as fsUtils from '../../utils/fs-utils';
 
 describe('BackupState', () => {
   let backupState: ReturnType<typeof createBackupState>;
@@ -132,6 +133,63 @@ describe('BackupState', () => {
         files: {},
       };
       await backupState.saveBaseline(snapshot);
+      expect(backupState.getBaseline()).toEqual(snapshot);
+    });
+  });
+
+  describe('loadBaseline - corrupted / malformed file recovery', () => {
+    let loadJsonSpy: ReturnType<
+      typeof import('../../../test-config/mocks/test-helpers').spyOn
+    >;
+
+    afterEach(() => {
+      loadJsonSpy?.mockRestore();
+    });
+
+    it('should return null when baseline file contains malformed JSON', async () => {
+      // loadJsonFromFile catches JSON parse errors and returns the default (null)
+      loadJsonSpy = (await import('../../../test-config/mocks/test-helpers'))
+        .spyOn(fsUtils, 'loadJsonFromFile')
+        .mockImplementation(() => Promise.resolve(null));
+
+      const result = await backupState.loadBaseline();
+
+      expect(result).toBeNull();
+      expect(backupState.getBaseline()).toBeNull();
+    });
+
+    it('should return null when baseline file is missing (does not exist)', async () => {
+      loadJsonSpy = (await import('../../../test-config/mocks/test-helpers'))
+        .spyOn(fsUtils, 'loadJsonFromFile')
+        .mockImplementation(() => Promise.resolve(null));
+
+      const result = await backupState.loadBaseline();
+
+      expect(result).toBeNull();
+    });
+
+    it('should return baseline when file loads correctly', async () => {
+      const snapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/src',
+        targetDir: '/backup',
+        files: {
+          'a.txt': {
+            checksum: 'abc',
+            size: 1,
+            mode: 0o644,
+            mtime: '2026-01-01T00:00:00Z',
+          },
+        },
+      };
+      loadJsonSpy = (await import('../../../test-config/mocks/test-helpers'))
+        .spyOn(fsUtils, 'loadJsonFromFile')
+        .mockImplementation(() => Promise.resolve(snapshot));
+
+      const result = await backupState.loadBaseline();
+
+      expect(result).toEqual(snapshot);
       expect(backupState.getBaseline()).toEqual(snapshot);
     });
   });

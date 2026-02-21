@@ -292,5 +292,73 @@ describe('syncFiles', () => {
         '/Backups',
       );
     });
+
+    it('should skip deletion when detectDeletions returns a path containing ..', async () => {
+      const files: FileInfo[] = [createFile('ok.txt', 'hash')];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: [],
+        totalSizeBytes: 0,
+        totalSizeMB: '0.00',
+      };
+
+      const mockScanner = {
+        ...createMockFileScanner(),
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const deleteFile = mock(() => Promise.resolve(true));
+      mockInternxt.deleteFile = deleteFile;
+
+      const mockBackupState = createMockBackupState();
+      mockBackupState.getBaseline = mock(() => ({
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {},
+      }));
+      mockBackupState.getChangedSinceBaseline = mock(() => []);
+      // detectDeletions returns a path with .. — simulating a tampered baseline
+      mockBackupState.detectDeletions = mock(() => ['../../etc/passwd']);
+      mockBackupState.createBaselineFromScan = mock(() => ({
+        version: 1,
+        timestamp: '2026-01-02T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {},
+      }));
+
+      const mockUploader = {
+        startUpload: mock(() => Promise.resolve()),
+        setFileScanner: mock(() => {}),
+        handleFileUpload: mock(() =>
+          Promise.resolve({ success: true, filePath: 'ok.txt' }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
+      };
+
+      await syncFiles(
+        '/source',
+        { target: '/Backups', syncDeletes: true },
+        dependencies,
+      );
+
+      // The traversal path must never reach deleteFile
+      expect(deleteFile).not.toHaveBeenCalled();
+    });
   });
 });
