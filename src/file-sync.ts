@@ -10,6 +10,7 @@ import { createProgressTracker } from './core/upload/progress-tracker';
 import { createResumableUploader } from './core/upload/resumable-uploader';
 import { createBackupState } from './core/backup/backup-state';
 import { getStateDir } from './utils/state-dir';
+import { acquireLock, releaseLock } from './utils/lock';
 
 export interface SyncOptions {
   cores?: number;
@@ -32,6 +33,8 @@ export interface SyncDependencies {
   createResumableUploader?: typeof createResumableUploader;
   createBackupState?: typeof createBackupState;
   getOptimalConcurrency?: typeof getOptimalConcurrency;
+  acquireLock?: typeof acquireLock;
+  releaseLock?: typeof releaseLock;
 }
 
 export async function syncFiles(
@@ -39,6 +42,10 @@ export async function syncFiles(
   options: SyncOptions,
   dependencies: SyncDependencies = {},
 ): Promise<void> {
+  const lock = dependencies.acquireLock ?? acquireLock;
+  const unlock = dependencies.releaseLock ?? releaseLock;
+
+  lock();
   try {
     const makeFileScanner = dependencies.createFileScanner ?? createFileScanner;
     const makeUploader = dependencies.createUploader ?? createUploader;
@@ -212,5 +219,7 @@ export async function syncFiles(
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`Error during file sync: ${errorMessage}`);
     throw error;
+  } finally {
+    unlock();
   }
 }

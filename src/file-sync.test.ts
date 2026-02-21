@@ -163,6 +163,8 @@ describe('syncFiles', () => {
         createUploader: () => mockUploader,
         createBackupState: () => mockBackupState,
         getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
       };
 
       await syncFiles(
@@ -261,6 +263,8 @@ describe('syncFiles', () => {
         createUploader: () => mockUploader,
         createBackupState: () => mockBackupState,
         getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
       };
 
       await syncFiles(
