@@ -86,6 +86,7 @@ bun run lint         # oxlint
 bun run format       # oxfmt --check
 bun run typecheck    # tsc --noEmit
 bun test             # full test suite
+bun test --coverage  # coverage + threshold validation
 bun run build        # build artifact validation
 bun test path/to/file.test.ts  # optional: run a single test file while iterating
 ```

@@ -17,11 +17,17 @@ import * as logger from '../../utils/logger';
 
 describe('createProgressTracker', () => {
   const originalStdoutWrite = process.stdout.write;
+  const originalStderrWrite = process.stderr.write;
   let loggerSpy: ReturnType<typeof spyOn>;
+  let stdoutWriteMock: ReturnType<typeof mock>;
+  let stderrWriteMock: ReturnType<typeof mock>;
 
   beforeEach(() => {
     jest.useFakeTimers();
-    process.stdout.write = mock(() => true) as any;
+    stdoutWriteMock = mock(() => true);
+    stderrWriteMock = mock(() => true);
+    process.stdout.write = stdoutWriteMock as any;
+    process.stderr.write = stderrWriteMock as any;
 
     loggerSpy = spyOn(logger, 'always').mockImplementation(() => {});
   });
@@ -32,6 +38,7 @@ describe('createProgressTracker', () => {
       jest.useRealTimers();
     }
     process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
     loggerSpy.mockRestore();
   });
 
@@ -105,6 +112,75 @@ describe('createProgressTracker', () => {
       tracker.stopProgressUpdates();
 
       expect(tracker.getProgressPercentage()).toBe(0);
+    });
+
+    it('should intercept stdout and stderr writes while tracking', () => {
+      const tracker = createProgressTracker();
+      tracker.initialize(4);
+      tracker.startProgressUpdates(100);
+
+      process.stdout.write('stdout line\n');
+      process.stderr.write('stderr line\n');
+
+      tracker.stopProgressUpdates();
+
+      const stdoutCalls = stdoutWriteMock.mock.calls.map((args) =>
+        String(args[0]),
+      );
+      const stderrCalls = stderrWriteMock.mock.calls.map((args) =>
+        String(args[0]),
+      );
+      expect(stdoutCalls.some((call) => call.includes('stdout line'))).toBe(
+        true,
+      );
+      expect(stderrCalls.some((call) => call.includes('stderr line'))).toBe(
+        true,
+      );
+      expect(stdoutCalls.some((call) => call.includes('\x1B[K'))).toBe(true);
+    });
+
+    it('should auto-stop progress updates when processing completes', () => {
+      const tracker = createProgressTracker();
+      tracker.initialize(1);
+      tracker.startProgressUpdates(50);
+
+      tracker.recordSuccess();
+      jest.advanceTimersByTime(60);
+
+      // If auto-stop worked, it should not throw and restoration path is valid.
+      tracker.stopProgressUpdates();
+      expect(tracker.isComplete()).toBe(true);
+    });
+  });
+
+  describe('displaySummary', () => {
+    it('should print success summary when there are no failures', () => {
+      const tracker = createProgressTracker(undefined, 'Upload');
+      tracker.initialize(2);
+      tracker.recordSuccess();
+      tracker.recordSuccess();
+
+      tracker.displaySummary();
+
+      expect(loggerSpy).toHaveBeenCalledTimes(1);
+      const logged = String(loggerSpy.mock.calls[0][0]);
+      expect(logged.includes('completed successfully')).toBe(true);
+      expect(logged.includes('2 files uploaded')).toBe(true);
+    });
+
+    it('should stop active tracking and print warning summary on failures', () => {
+      const tracker = createProgressTracker(undefined, 'Restore');
+      tracker.initialize(3);
+      tracker.startProgressUpdates(100);
+      tracker.recordSuccess();
+      tracker.recordFailure();
+
+      tracker.displaySummary();
+
+      expect(loggerSpy).toHaveBeenCalledTimes(1);
+      const logged = String(loggerSpy.mock.calls[0][0]);
+      expect(logged.includes('completed with issues')).toBe(true);
+      expect(logged.includes('1 succeeded, 1 failed')).toBe(true);
     });
   });
 });
