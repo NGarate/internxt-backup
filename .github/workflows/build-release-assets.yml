@@ -10,7 +10,8 @@ on:
   # Keep push trigger as fallback for manual tag pushes (e.g., with PAT)
   push:
     tags:
-      - 'v*'
+      - 'v0.*.*'
+      - '0.*.*'
   # Manual trigger with configurable options
   workflow_dispatch:
     inputs:
@@ -39,6 +40,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.get-tag.outputs.tag }}
+      release_version: ${{ steps.get-tag.outputs.release_version }}
       should_build: ${{ steps.get-tag.outputs.should_build }}
     steps:
       - name: Determine release tag
@@ -50,9 +52,18 @@ jobs:
           WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           REPOSITORY: ${{ github.repository }}
         run: |
+          BETA_SEMVER_REGEX='^0\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+
           # Handle push event (tag was manually pushed)
           if [[ "$EVENT_NAME" == "push" ]]; then
+            VERSION=${REF_NAME#v}
+            if ! [[ "$VERSION" =~ $BETA_SEMVER_REGEX ]]; then
+              echo "Tag '$REF_NAME' is not a valid beta semver tag (0.x.x), skipping build"
+              echo "should_build=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
             echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
+            echo "release_version=$VERSION" >> $GITHUB_OUTPUT
             echo "should_build=true" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -115,6 +126,13 @@ jobs:
 
           TAG=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
           CREATED_AT=$(echo "$LATEST_RELEASE" | jq -r '.created_at')
+          VERSION=${TAG#v}
+
+          if ! [[ "$VERSION" =~ $BETA_SEMVER_REGEX ]]; then
+            echo "Latest release tag '$TAG' is not a beta semver tag (0.x.x), skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           # Check if the release was created within the configured threshold (default: 30 minutes)
           RELEASE_TIME=$(date -d "$CREATED_AT" +%s)
@@ -129,6 +147,7 @@ jobs:
 
           echo "Found recent release: $TAG (created $AGE seconds ago)"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "release_version=$VERSION" >> $GITHUB_OUTPUT
           echo "should_build=true" >> $GITHUB_OUTPUT
 
   validate:
@@ -234,7 +253,7 @@ jobs:
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files: ./release/${{ matrix.artifact }}.*
-          name: Release ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.release_version }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -266,7 +285,7 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           VERSION=$RELEASE_TAG
-          VERSION=${VERSION#v}  # Remove 'v' prefix to match changelog format (e.g., v1.0.0 -> 1.0.0)
+          VERSION=${VERSION#v}  # Remove 'v' prefix to match changelog format (e.g., v0.4.0 -> 0.4.0)
           # Extract changelog entry for this version
           CHANGELOG=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md | head -n -1)
           if [[ -z "$CHANGELOG" ]]; then
@@ -281,6 +300,7 @@ jobs:
         uses: softprops/action-gh-release@v2.5.0
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.release_version }}
           body: |
             ${{ steps.changelog.outputs.CHANGELOG }}
 
