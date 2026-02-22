@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 
-## [2.0.1](https://github.com/NGarate/internxt-backup/compare/v2.0.0...v2.0.1) (2026-02-22)
+## [0.4.1](https://github.com/NGarate/internxt-backup/compare/v0.4.0...v0.4.1) (2026-02-22)
 
 ### Bug Fixes
 
@@ -36,7 +36,7 @@ All notable changes to this project will be documented in this file.
 * grant release jobs contents write permission ([acd7dac](https://github.com/NGarate/internxt-backup/commit/acd7dacbcb7d72233613b496b18e2041c55788ba))
 * rely on Bun native coverage threshold ([415a400](https://github.com/NGarate/internxt-backup/commit/415a4002d4d3322925b565c19374f5fc9ae579a1))
 
-## [2.0.0](https://github.com/NGarate/internxt-backup/compare/v1.0.0...v2.0.0) (2026-02-20)
+## [0.4.0](https://github.com/NGarate/internxt-backup/compare/v0.3.0...v0.4.0) (2026-02-20)
 
 ### ⚠ BREAKING CHANGES
 
@@ -87,7 +87,7 @@ All notable changes to this project will be documented in this file.
 * set up Node.js 24.x only for semantic-release workflow ([2356c7b](https://github.com/NGarate/internxt-backup/commit/2356c7bfd1c3a2234f3f42d3a01f137638b696a4))
 * streamline CI for agentic solo dev workflow ([c9ee5ea](https://github.com/NGarate/internxt-backup/commit/c9ee5ea2beb5f83d634a532a3c085dde73a4b675))
 
-## [1.0.0](https://github.com/NGarate/internxt-backup/compare/v0.2.23...v1.0.0) (2026-02-16)
+## [0.3.0](https://github.com/NGarate/internxt-backup/compare/v0.2.23...v0.3.0) (2026-02-16)
 
 ### ⚠ BREAKING CHANGES
 
