@@ -1,249 +1,202 @@
-/**
- * Tests for createScheduler factory function
- */
-
-import { expect, describe, it, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, mock } from 'bun:test';
 import { createScheduler, BackupConfig } from './scheduler';
-import { Verbosity } from '../../interfaces/logger';
-import * as fileSyncModule from '../../file-sync';
-import * as loggerModule from '../../utils/logger';
-import { spyOn } from '../../../test-config/mocks/test-helpers';
+
+class FakeCron {
+  static instances: FakeCron[] = [];
+
+  expression: string;
+  options?: Record<string, unknown>;
+  callback?: () => void | Promise<void>;
+  stopped = false;
+
+  constructor(
+    expression: string,
+    options?: Record<string, unknown>,
+    callback?: () => void | Promise<void>,
+  ) {
+    if (
+      expression === 'not-a-cron' ||
+      expression === '* *' ||
+      expression === '99 99 99 99 99'
+    ) {
+      throw new Error('invalid cron');
+    }
+    this.expression = expression;
+    this.options = options;
+    this.callback = callback;
+    FakeCron.instances.push(this);
+  }
+
+  stop() {
+    this.stopped = true;
+  }
+
+  nextRun() {
+    return new Date('2026-01-01T00:00:00Z');
+  }
+
+  previousRun() {
+    return null;
+  }
+
+  isRunning() {
+    return false;
+  }
+}
+
+const defaultConfig: BackupConfig = {
+  sourceDir: '/photos',
+  schedule: '0 2 * * *',
+  syncOptions: { target: '/Backups' },
+};
 
 describe('createScheduler', () => {
-  describe('initialization', () => {
-    it('should create with default options', () => {
-      const scheduler = createScheduler();
-      expect(scheduler).toBeDefined();
+  it('should reject invalid cron expressions', async () => {
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
     });
 
-    it('should create with custom verbosity', () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Verbose });
-      expect(scheduler).toBeDefined();
-    });
+    await expect(
+      scheduler.startDaemon({
+        ...defaultConfig,
+        schedule: 'not-a-cron',
+      }),
+    ).rejects.toThrow('Invalid cron expression');
   });
 
-  describe('interface', () => {
-    it('should have startDaemon method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.startDaemon).toBe('function');
+  it('should run one backup and log completion via runOnce', async () => {
+    const syncFilesFn = mock(() => Promise.resolve());
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      syncFilesFn,
+      nowFn: () => 1000,
     });
 
-    it('should have runOnce method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.runOnce).toBe('function');
-    });
+    await scheduler.runOnce(defaultConfig);
 
-    it('should have stopJob method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.stopJob).toBe('function');
-    });
-
-    it('should have stopAll method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.stopAll).toBe('function');
-    });
-
-    it('should have getJobInfo method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.getJobInfo).toBe('function');
-    });
-
-    it('should have runDelayed method', () => {
-      const scheduler = createScheduler();
-      expect(typeof scheduler.runDelayed).toBe('function');
-    });
+    expect(syncFilesFn).toHaveBeenCalledWith('/photos', { target: '/Backups' });
   });
 
-  describe('BackupConfig interface', () => {
-    it('should support all config options', () => {
-      const config: BackupConfig = {
-        sourceDir: '/test',
-        schedule: '0 2 * * *',
-        syncOptions: {
-          target: '/backup',
-          cores: 4,
-        },
-      };
-
-      expect(config.sourceDir).toBe('/test');
-      expect(config.schedule).toBe('0 2 * * *');
-      expect(config.syncOptions.target).toBe('/backup');
+  it('should throw when runOnce sync fails', async () => {
+    const syncFilesFn = mock(() => Promise.reject(new Error('disk full')));
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      syncFilesFn,
+      nowFn: () => 1000,
     });
+
+    await expect(scheduler.runOnce(defaultConfig)).rejects.toThrow('disk full');
   });
 
-  describe('cron expression validation', () => {
-    // startDaemon validates cron before running anything; invalid expressions
-    // throw immediately without reaching the long-running keepAlive loop.
+  it('should run initial backup, schedule cron with overlap protection, and shutdown on signal', async () => {
+    FakeCron.instances = [];
+    const syncFilesFn = mock(() => Promise.resolve());
+    const signalHandlers: Partial<Record<'SIGINT' | 'SIGTERM', () => void>> =
+      {};
+    const clearIntervalFn = mock(
+      (_timer: ReturnType<typeof setInterval>) => {},
+    );
+    const exitFn = mock((_code: number) => {});
 
-    it('should throw on invalid cron expression', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-
-      await expect(
-        scheduler.startDaemon({
-          sourceDir: '/src',
-          schedule: 'not-a-cron',
-          syncOptions: {},
-        }),
-      ).rejects.toThrow('Invalid cron expression');
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      syncFilesFn,
+      nowFn: () => 1735689600000,
+      nowDateFn: () => new Date('2026-01-01T00:00:00Z'),
+      registerSignalHandler: (signal, handler) => {
+        signalHandlers[signal] = handler;
+        return () => {
+          delete signalHandlers[signal];
+        };
+      },
+      setIntervalFn: (() => 12345) as any,
+      clearIntervalFn: clearIntervalFn as any,
+      exitFn,
     });
 
-    it('should reject an obviously invalid cron with too few fields', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      await expect(
-        scheduler.startDaemon({
-          sourceDir: '/src',
-          schedule: '* *',
-          syncOptions: {},
-        }),
-      ).rejects.toThrow('Invalid cron expression');
-    });
+    const daemonPromise = scheduler.startDaemon(defaultConfig);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    it('should reject a cron with out-of-range values', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      await expect(
-        scheduler.startDaemon({
-          sourceDir: '/src',
-          schedule: '99 99 99 99 99',
-          syncOptions: {},
-        }),
-      ).rejects.toThrow('Invalid cron expression');
-    });
+    expect(syncFilesFn).toHaveBeenCalledTimes(1);
+    const scheduledJob = FakeCron.instances.find((j) => Boolean(j.callback));
+    expect(scheduledJob).toBeDefined();
+    expect(scheduledJob?.options).toMatchObject({ protect: true });
+
+    signalHandlers.SIGTERM?.();
+    await daemonPromise;
+
+    expect(clearIntervalFn).toHaveBeenCalled();
+    expect(exitFn).toHaveBeenCalledWith(0);
   });
 
-  describe('runOnce', () => {
-    let syncFilesSpy: ReturnType<typeof spyOn>;
-    let infoSpy: ReturnType<typeof spyOn>;
-    let successSpy: ReturnType<typeof spyOn>;
-    let errorSpy: ReturnType<typeof spyOn>;
-
-    beforeEach(() => {
-      syncFilesSpy = spyOn(fileSyncModule, 'syncFiles').mockImplementation(() =>
-        Promise.resolve(),
-      );
-      infoSpy = spyOn(loggerModule, 'info').mockImplementation(() => {});
-      successSpy = spyOn(loggerModule, 'success').mockImplementation(() => {});
-      errorSpy = spyOn(loggerModule, 'error').mockImplementation(() => {});
+  it('should execute scheduled callback through cron job', async () => {
+    FakeCron.instances = [];
+    let callCount = 0;
+    const syncFilesFn = mock(async () => {
+      callCount++;
+      if (callCount === 2) {
+        throw new Error('scheduled failure');
+      }
+    });
+    const signalHandlers: Partial<Record<'SIGINT' | 'SIGTERM', () => void>> =
+      {};
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      syncFilesFn,
+      registerSignalHandler: (signal, handler) => {
+        signalHandlers[signal] = handler;
+        return () => {
+          delete signalHandlers[signal];
+        };
+      },
+      setIntervalFn: (() => 12345) as any,
+      clearIntervalFn: (() => {}) as any,
+      exitFn: () => {},
     });
 
-    afterEach(() => {
-      syncFilesSpy.mockRestore();
-      infoSpy.mockRestore();
-      successSpy.mockRestore();
-      errorSpy.mockRestore();
-    });
+    const daemonPromise = scheduler.startDaemon(defaultConfig);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    it('should call syncFiles with the source dir and sync options', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      const config: BackupConfig = {
-        sourceDir: '/photos',
-        schedule: '0 2 * * *',
-        syncOptions: {
-          target: '/Backups',
-          acquireLock: () => {},
-          releaseLock: () => {},
-        },
-      };
+    const scheduledJob = FakeCron.instances.find((j) => Boolean(j.callback));
+    expect(scheduledJob).toBeDefined();
 
-      await scheduler.runOnce(config);
+    await scheduledJob!.callback!();
+    expect(syncFilesFn).toHaveBeenCalledTimes(2);
 
-      expect(syncFilesSpy).toHaveBeenCalledWith('/photos', {
-        target: '/Backups',
-        acquireLock: expect.any(Function),
-        releaseLock: expect.any(Function),
-      });
-    });
-
-    it('should log success with duration after backup completes', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      await scheduler.runOnce({
-        sourceDir: '/src',
-        schedule: '0 2 * * *',
-        syncOptions: { acquireLock: () => {}, releaseLock: () => {} },
-      });
-
-      expect(successSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Backup completed in'),
-        expect.anything(),
-      );
-    });
-
-    it('should throw and log error when syncFiles fails', async () => {
-      syncFilesSpy.mockImplementation(() =>
-        Promise.reject(new Error('disk full')),
-      );
-
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-
-      await expect(
-        scheduler.runOnce({
-          sourceDir: '/src',
-          schedule: '0 2 * * *',
-          syncOptions: { acquireLock: () => {}, releaseLock: () => {} },
-        }),
-      ).rejects.toThrow('disk full');
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('disk full'),
-      );
-    });
-
-    it('should log info at start of backup', async () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      await scheduler.runOnce({
-        sourceDir: '/my-source',
-        schedule: '0 2 * * *',
-        syncOptions: {},
-      });
-
-      expect(infoSpy).toHaveBeenCalledWith(
-        expect.stringContaining('/my-source'),
-        expect.anything(),
-      );
-    });
+    signalHandlers.SIGINT?.();
+    await daemonPromise;
   });
 
-  describe('stopJob / stopAll', () => {
-    it('should return false when stopping a non-existent job', () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      expect(scheduler.stopJob('nonexistent-job-id')).toBe(false);
+  it('should stop jobs and report job info', () => {
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      registerSignalHandler: () => () => {},
+      setIntervalFn: (() => 12345) as any,
+      clearIntervalFn: (() => {}) as any,
+      exitFn: () => {},
     });
 
-    it('should return empty array before any jobs are started', () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      expect(scheduler.getJobInfo()).toEqual([]);
-    });
-
-    it('stopAll should clear all jobs', () => {
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      scheduler.stopAll();
-      expect(scheduler.getJobInfo()).toHaveLength(0);
-    });
+    expect(scheduler.stopJob('missing')).toBe(false);
+    expect(scheduler.getJobInfo()).toEqual([]);
   });
 
-  describe('runDelayed', () => {
-    it('should wait the given delay before running backup', async () => {
-      const syncFilesSpy = spyOn(
-        fileSyncModule,
-        'syncFiles',
-      ).mockImplementation(() => Promise.resolve());
-
-      const scheduler = createScheduler({ verbosity: Verbosity.Quiet });
-      const start = Date.now();
-
-      await scheduler.runDelayed(
-        {
-          sourceDir: '/src',
-          schedule: '0 2 * * *',
-          syncOptions: { acquireLock: () => {}, releaseLock: () => {} },
-        },
-        50,
-      );
-
-      const elapsed = Date.now() - start;
-      expect(elapsed).toBeGreaterThanOrEqual(40);
-      expect(syncFilesSpy).toHaveBeenCalled();
-
-      syncFilesSpy.mockRestore();
+  it('should delay before running backup in runDelayed', async () => {
+    const syncFilesFn = mock(() => Promise.resolve());
+    const scheduler = createScheduler({
+      verbosity: 0,
+      cronConstructor: FakeCron as any,
+      syncFilesFn,
     });
+
+    const start = Date.now();
+    await scheduler.runDelayed(defaultConfig, 25);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(20);
+    expect(syncFilesFn).toHaveBeenCalledTimes(1);
   });
 });

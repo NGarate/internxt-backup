@@ -26,9 +26,19 @@ describe('createFileScanner', () => {
   let saveJsonToFileSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
-    fsStatSyncSpy = spyOn(fs, 'statSync').mockImplementation(() => ({
-      size: 1024,
-    }));
+    fsStatSyncSpy = spyOn(fs, 'statSync').mockImplementation((targetPath) => {
+      if (String(targetPath).includes('.internxt-backup')) {
+        return {
+          isDirectory: () => true,
+          mode: 0o700,
+        } as fs.Stats;
+      }
+      return {
+        size: 1024,
+        mode: 0o644,
+        isDirectory: () => false,
+      } as fs.Stats;
+    });
     fsReaddirSyncSpy = spyOn(fs, 'readdirSync').mockImplementation(() => [
       { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
     ]);
@@ -213,6 +223,24 @@ describe('createFileScanner', () => {
       const result = await scanner.scan();
 
       expect(result.allFiles.length).toBe(1);
+    });
+
+    it('should ignore symbolic links', async () => {
+      fsReaddirSyncSpy.mockImplementation(() => [
+        {
+          name: 'linked-file',
+          isDirectory: () => false,
+          isFile: () => false,
+          isSymbolicLink: () => true,
+        },
+        { name: 'visible.txt', isDirectory: () => false, isFile: () => true },
+      ]);
+
+      const scanner = createFileScanner('/test/dir');
+      const result = await scanner.scan();
+
+      expect(result.allFiles.length).toBe(1);
+      expect(result.allFiles[0].relativePath).toContain('visible.txt');
     });
 
     it('should force upload all files when forceUpload is enabled', async () => {

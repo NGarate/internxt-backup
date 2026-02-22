@@ -78,6 +78,12 @@ describe('normalizePathInfo', () => {
       ).toThrow('Path traversal detected');
     });
 
+    it('should throw on absolute paths', () => {
+      expect(() => normalizePathInfo('/etc/passwd', '/Backups')).toThrow(
+        'Path traversal detected',
+      );
+    });
+
     it('should allow normal paths without ..', () => {
       expect(() =>
         normalizePathInfo('foo/bar/baz.txt', '/Backups'),

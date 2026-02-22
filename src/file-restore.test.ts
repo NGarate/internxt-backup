@@ -305,6 +305,34 @@ describe('restoreFiles', () => {
       expect(mockDownloader.startDownload).not.toHaveBeenCalled();
     });
 
+    it('should block path traversal entries before downloader is invoked', async () => {
+      mockInternxt.listFilesRecursive = mock(() =>
+        Promise.resolve([
+          {
+            uuid: 'u-evil',
+            name: 'passwd',
+            remotePath: '/Backups/../../etc/passwd',
+            size: 100,
+            isFolder: false,
+          },
+        ]),
+      );
+
+      const options: RestoreOptions = {
+        source: '/Backups',
+        target: '/tmp/restore',
+        verify: false,
+      };
+
+      await restoreFiles(options);
+
+      expect(mockDownloader.startDownload).not.toHaveBeenCalled();
+      expect(warningSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Path traversal blocked'),
+        expect.anything(),
+      );
+    });
+
     it('should report verified and failed checksum counts', async () => {
       mockInternxt.listFilesRecursive = mock(() =>
         Promise.resolve([

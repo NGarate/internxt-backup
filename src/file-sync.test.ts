@@ -13,6 +13,7 @@ import type { FileScanner } from './core/file-scanner';
 import type { Uploader } from './core/upload/uploader';
 import {
   createMockBackupState,
+  createMockFileInfo,
   createMockFileScanner,
   createMockHashCache,
   createMockInternxtService,
@@ -358,6 +359,76 @@ describe('syncFiles', () => {
       );
 
       // The traversal path must never reach deleteFile
+      expect(deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('should skip deletion when detectDeletions returns Windows-style traversal paths', async () => {
+      const scanResult: ScanResult = {
+        allFiles: [
+          createMockFileInfo('/source/file1.txt', '/source'),
+          createMockFileInfo('/source/file2.txt', '/source'),
+        ],
+        filesToUpload: [],
+        totalSizeBytes: 0,
+        totalSizeMB: '0.00',
+      };
+
+      const mockScanner = {
+        ...createMockFileScanner(),
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const deleteFile = mock(() => Promise.resolve(true));
+      mockInternxt.deleteFile = deleteFile;
+
+      const mockBackupState = createMockBackupState();
+      mockBackupState.getBaseline = mock(() => ({
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {},
+      }));
+      mockBackupState.getChangedSinceBaseline = mock(() => []);
+      mockBackupState.detectDeletions = mock(() => [
+        'folder\\..\\..\\etc\\passwd',
+      ]);
+      mockBackupState.createBaselineFromScan = mock(() => ({
+        version: 1,
+        timestamp: '2026-01-02T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {},
+      }));
+
+      const mockUploader = {
+        startUpload: mock(() => Promise.resolve()),
+        setFileScanner: mock(() => {}),
+        handleFileUpload: mock(() =>
+          Promise.resolve({ success: true, filePath: 'ok.txt' }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
+      };
+
+      await syncFiles(
+        '/source',
+        { target: '/Backups', syncDeletes: true },
+        dependencies,
+      );
+
       expect(deleteFile).not.toHaveBeenCalled();
     });
   });

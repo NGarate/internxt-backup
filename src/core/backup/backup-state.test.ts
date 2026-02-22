@@ -1,13 +1,31 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createBackupState } from './backup-state';
 import { FileInfo, BaselineSnapshot } from '../../interfaces/file-scanner';
 import * as fsUtils from '../../utils/fs-utils';
+import * as stateDirModule from '../../utils/state-dir';
+import { createMockInternxtService } from '../../../test-config/mocks/test-helpers';
 
 describe('BackupState', () => {
   let backupState: ReturnType<typeof createBackupState>;
+  let tempStateDir: string;
+  let getStateDirSpy: ReturnType<typeof spyOn>;
 
   beforeEach(() => {
+    tempStateDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'internxt-backup-state-test-'),
+    );
+    getStateDirSpy = spyOn(stateDirModule, 'getStateDir').mockImplementation(
+      () => tempStateDir,
+    );
     backupState = createBackupState(0);
+  });
+
+  afterEach(() => {
+    getStateDirSpy.mockRestore();
+    fs.rmSync(tempStateDir, { recursive: true, force: true });
   });
 
   describe('getChangedSinceBaseline', () => {
@@ -191,6 +209,49 @@ describe('BackupState', () => {
 
       expect(result).toEqual(snapshot);
       expect(backupState.getBaseline()).toEqual(snapshot);
+    });
+  });
+
+  describe('downloadManifest - corrupted / malformed file recovery', () => {
+    let loadJsonSpy: ReturnType<
+      typeof import('../../../test-config/mocks/test-helpers').spyOn
+    >;
+
+    afterEach(() => {
+      loadJsonSpy?.mockRestore();
+    });
+
+    it('should return null when downloaded manifest JSON is malformed', async () => {
+      const mockInternxt = createMockInternxtService();
+      mockInternxt.listFiles = () =>
+        Promise.resolve({
+          success: true,
+          files: [
+            {
+              name: '.internxt-backup-meta.json',
+              path: '/Backups/.internxt-backup-meta.json',
+              size: 100,
+              isFolder: false,
+              uuid: 'manifest-uuid',
+            },
+          ],
+        });
+      mockInternxt.downloadFile = () =>
+        Promise.resolve({
+          success: true,
+          fileId: 'manifest-uuid',
+          localPath: '/tmp',
+        });
+
+      loadJsonSpy = (await import('../../../test-config/mocks/test-helpers'))
+        .spyOn(fsUtils, 'loadJsonFromFile')
+        .mockImplementation(() => Promise.resolve(null));
+
+      const result = await backupState.downloadManifest(
+        mockInternxt,
+        '/Backups',
+      );
+      expect(result).toBeNull();
     });
   });
 });
