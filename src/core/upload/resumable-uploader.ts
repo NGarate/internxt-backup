@@ -49,7 +49,7 @@ export function createResumableUploader(
 
   const getStateFilePath = (filePath: string): string => {
     const fileName = basename(filePath);
-    const hash = createHash('md5').update(filePath).digest('hex');
+    const hash = createHash('sha256').update(filePath).digest('hex');
     return join(resumeDir, `${fileName}.${hash}${STATE_FILE_EXTENSION}`);
   };
 

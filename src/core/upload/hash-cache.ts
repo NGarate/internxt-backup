@@ -12,7 +12,6 @@ export function createHashCache(
   verbosity: number = Verbosity.Normal,
 ) {
   const cache = new Map<string, string>();
-  const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 
   const calculateHash = async (filePath: string): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -79,15 +78,6 @@ export function createHashCache(
       if (!storedHash) {
         logVerbose(
           `No cached hash for ${normalizedPath}, marking as changed`,
-          verbosity,
-        );
-        cache.set(normalizedPath, currentHash);
-        return true;
-      }
-
-      if (!SHA256_HEX_PATTERN.test(storedHash)) {
-        logVerbose(
-          `Legacy hash detected for ${normalizedPath}; migrating to SHA-256`,
           verbosity,
         );
         cache.set(normalizedPath, currentHash);

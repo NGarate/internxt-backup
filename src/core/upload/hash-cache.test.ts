@@ -244,31 +244,6 @@ describe('createHashCache', () => {
       expect(hashCache.cache.get(normalizedPath)).toBe('new-hash');
     });
 
-    it('should migrate legacy non-SHA256 hashes on first check', async () => {
-      const hashCache = createHashCache('/test/path.json');
-      const filePath = '/test/file.txt';
-      const normalizedPath = path.normalize(filePath);
-
-      hashCache.updateHash(filePath, 'legacy-md5-hash');
-
-      mockCrypto.createHash.mockImplementation(() => ({
-        update: mock(function (this: any) {
-          return this;
-        }),
-        digest: mock(
-          () =>
-            'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
-        ),
-      }));
-
-      const hasChanged = await hashCache.hasChanged(filePath);
-
-      expect(hasChanged).toBe(true);
-      expect(hashCache.cache.get(normalizedPath)).toBe(
-        'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
-      );
-    });
-
     it('should detect that a file is unchanged when hash matches', async () => {
       const hashCache = createHashCache('/test/path.json');
       const filePath = '/test/file.txt';
