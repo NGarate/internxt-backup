@@ -2,6 +2,21 @@ import { Cron } from 'croner';
 import * as logger from '../../utils/logger';
 import { syncFiles, SyncOptions } from '../../file-sync';
 
+type SignalName = 'SIGINT' | 'SIGTERM';
+
+interface CronJob {
+  stop: () => void;
+  nextRun: () => Date | null;
+  previousRun: () => Date | null;
+  isRunning: () => boolean;
+}
+
+type CronConstructor = new (
+  expression: string,
+  options?: Record<string, unknown>,
+  callback?: () => void | Promise<void>,
+) => CronJob;
+
 export interface BackupConfig {
   sourceDir: string;
   schedule: string;
@@ -10,15 +25,43 @@ export interface BackupConfig {
 
 export interface SchedulerOptions {
   verbosity?: number;
+  cronConstructor?: CronConstructor;
+  syncFilesFn?: typeof syncFiles;
+  nowFn?: () => number;
+  nowDateFn?: () => Date;
+  registerSignalHandler?: (
+    signal: SignalName,
+    handler: () => void,
+  ) => () => void;
+  setIntervalFn?: typeof setInterval;
+  clearIntervalFn?: typeof clearInterval;
+  exitFn?: (code: number) => void;
 }
 
 export function createScheduler(options: SchedulerOptions = {}) {
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
-  const jobs = new Map<string, Cron>();
+  const CronImpl =
+    options.cronConstructor ?? (Cron as unknown as CronConstructor);
+  const runSync = options.syncFilesFn ?? syncFiles;
+  const now = options.nowFn ?? (() => Date.now());
+  const nowDate = options.nowDateFn ?? (() => new Date());
+  const registerSignalHandler =
+    options.registerSignalHandler ??
+    ((signal: SignalName, handler: () => void) => {
+      process.on(signal, handler);
+      return () => {
+        process.off(signal, handler);
+      };
+    });
+  const setIntervalFn = options.setIntervalFn ?? setInterval;
+  const clearIntervalFn = options.clearIntervalFn ?? clearInterval;
+  const exitFn = options.exitFn ?? ((code: number) => process.exit(code));
+
+  const jobs = new Map<string, CronJob>();
 
   const validateCronExpression = (expression: string): boolean => {
     try {
-      new Cron(expression, { maxRuns: 1 });
+      new CronImpl(expression, { maxRuns: 1 });
       return true;
     } catch {
       return false;
@@ -26,12 +69,12 @@ export function createScheduler(options: SchedulerOptions = {}) {
   };
 
   const runOnce = async (config: BackupConfig): Promise<void> => {
-    const startTime = Date.now();
+    const startTime = now();
 
     try {
       logger.info(`Starting backup from ${config.sourceDir}`, verbosity);
-      await syncFiles(config.sourceDir, config.syncOptions);
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      await runSync(config.sourceDir, config.syncOptions);
+      const duration = ((now() - startTime) / 1000).toFixed(1);
       logger.success(`Backup completed in ${duration}s`, verbosity);
     } catch (error) {
       const errorMessage =
@@ -43,17 +86,30 @@ export function createScheduler(options: SchedulerOptions = {}) {
 
   const keepAlive = async (): Promise<void> => {
     return new Promise((resolve) => {
+      let stopped = false;
+
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      let stopSigint: () => void = () => {};
+      let stopSigterm: () => void = () => {};
       const shutdown = () => {
+        if (stopped) {
+          return;
+        }
+        stopped = true;
         logger.info('\nShutting down daemon...', verbosity);
         stopAll();
+        stopSigint();
+        stopSigterm();
+        if (heartbeat) {
+          clearIntervalFn(heartbeat);
+        }
         resolve();
-        process.exit(0);
+        exitFn(0);
       };
 
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
-
-      setInterval(() => {}, 60000);
+      stopSigint = registerSignalHandler('SIGINT', shutdown);
+      stopSigterm = registerSignalHandler('SIGTERM', shutdown);
+      heartbeat = setIntervalFn(() => {}, 60000);
     });
   };
 
@@ -72,14 +128,14 @@ export function createScheduler(options: SchedulerOptions = {}) {
     logger.info('Running initial backup...', verbosity);
     await runOnce(config);
 
-    const jobId = `${config.sourceDir}-${Date.now()}`;
+    const jobId = `${config.sourceDir}-${now()}`;
 
-    const job = new Cron(
+    const job = new CronImpl(
       config.schedule,
       { name: jobId, protect: true },
       async () => {
         logger.info(
-          `Scheduled backup triggered at ${new Date().toISOString()}`,
+          `Scheduled backup triggered at ${nowDate().toISOString()}`,
           verbosity,
         );
         try {

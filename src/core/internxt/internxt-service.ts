@@ -17,8 +17,10 @@ const defaultExecAsync = promisify(exec);
 export function createInternxtService(options: InternxtServiceOptions = {}) {
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
   const execAsync = options.execFn ?? defaultExecAsync;
+  const spawnAsync = options.spawnFn ?? spawn;
   let rootFolderUuid: string | null = null;
   const folderUuidCache = new Map<string, string>();
+  const pathResolutionInFlight = new Map<string, Promise<string | null>>();
 
   const shellEscape = (value: string): string => {
     return `'${value.replace(/'/g, "'\"'\"'")}'`;
@@ -155,58 +157,72 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
   ): Promise<string | null> => {
     const normalizedPath =
       remotePath === '/' ? '' : remotePath.replace(/\/+$/, '');
-
     if (folderUuidCache.has(normalizedPath)) {
       return folderUuidCache.get(normalizedPath)!;
     }
 
-    if (!normalizedPath || normalizedPath === '/') {
-      const rootUuid = await getRootFolderUuid();
-      if (rootUuid) {
-        folderUuidCache.set('', rootUuid);
-      }
-      return rootUuid;
+    const inFlightKey = `${opts.create ? 'create' : 'read'}:${normalizedPath}`;
+    const inFlightResolution = pathResolutionInFlight.get(inFlightKey);
+    if (inFlightResolution) {
+      return await inFlightResolution;
     }
 
-    const segments = normalizedPath.split('/').filter((s) => s.length > 0);
-
-    let currentUuid = await getRootFolderUuid();
-    if (!currentUuid) {
-      return null;
-    }
-
-    let currentPath = '';
-    for (const segment of segments) {
-      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-
-      if (folderUuidCache.has(currentPath)) {
-        currentUuid = folderUuidCache.get(currentPath)!;
-        continue;
-      }
-
-      let folderUuid = await findFolderInParent(currentUuid, segment);
-
-      if (!folderUuid && opts.create) {
-        folderUuid = await createSingleFolder(currentUuid, segment);
-        // Retry find if creation failed (concurrent creation)
-        if (!folderUuid) {
-          folderUuid = await findFolderInParent(currentUuid, segment);
+    const resolution = (async (): Promise<string | null> => {
+      if (!normalizedPath || normalizedPath === '/') {
+        const rootUuid = await getRootFolderUuid();
+        if (rootUuid) {
+          folderUuidCache.set('', rootUuid);
         }
+        return rootUuid;
       }
 
-      if (!folderUuid) {
-        logger.verbose(
-          `Failed to resolve folder segment: ${segment}`,
-          verbosity,
-        );
+      const segments = normalizedPath.split('/').filter((s) => s.length > 0);
+
+      let currentUuid = await getRootFolderUuid();
+      if (!currentUuid) {
         return null;
       }
 
-      folderUuidCache.set(currentPath, folderUuid);
-      currentUuid = folderUuid;
-    }
+      let currentPath = '';
+      for (const segment of segments) {
+        currentPath = currentPath ? `${currentPath}/${segment}` : segment;
 
-    return currentUuid;
+        if (folderUuidCache.has(currentPath)) {
+          currentUuid = folderUuidCache.get(currentPath)!;
+          continue;
+        }
+
+        let folderUuid = await findFolderInParent(currentUuid, segment);
+
+        if (!folderUuid && opts.create) {
+          folderUuid = await createSingleFolder(currentUuid, segment);
+          // Retry find if creation failed (concurrent creation)
+          if (!folderUuid) {
+            folderUuid = await findFolderInParent(currentUuid, segment);
+          }
+        }
+
+        if (!folderUuid) {
+          logger.verbose(
+            `Failed to resolve folder segment: ${segment}`,
+            verbosity,
+          );
+          return null;
+        }
+
+        folderUuidCache.set(currentPath, folderUuid);
+        currentUuid = folderUuid;
+      }
+
+      return currentUuid;
+    })();
+
+    pathResolutionInFlight.set(inFlightKey, resolution);
+    try {
+      return await resolution;
+    } finally {
+      pathResolutionInFlight.delete(inFlightKey);
+    }
   };
 
   const tryUploadFile = async (
@@ -380,7 +396,7 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
       }
 
       return await new Promise((resolve) => {
-        const child = spawn(
+        const child = spawnAsync(
           'internxt',
           [
             'upload-file',

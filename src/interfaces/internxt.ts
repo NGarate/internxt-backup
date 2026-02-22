@@ -42,6 +42,7 @@ export interface InternxtFileInfo {
 export interface InternxtServiceOptions {
   verbosity?: number;
   execFn?: (cmd: string) => Promise<{ stdout: string; stderr: string }>;
+  spawnFn?: typeof import('node:child_process').spawn;
 }
 
 export interface UploadProgress {
