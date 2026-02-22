@@ -70,8 +70,6 @@ export function createFileScanner(
         if (entry.isDirectory()) {
           const subDirFiles = await scanDirectory(fullPath, baseDir);
           files.push(...subDirFiles);
-        } else if (entry.isSymbolicLink()) {
-          logger.warning(`Skipping symlink: ${relativePath}`, verbosity);
         } else if (entry.isFile()) {
           const stats = fs.statSync(fullPath);
           logger.verbose(`Calculating checksum for ${relativePath}`, verbosity);

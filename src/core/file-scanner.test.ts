@@ -20,7 +20,6 @@ describe('createFileScanner', () => {
   let loggerVerboseSpy: ReturnType<typeof spyOn>;
   let loggerInfoSpy: ReturnType<typeof spyOn>;
   let loggerErrorSpy: ReturnType<typeof spyOn>;
-  let loggerWarningSpy: ReturnType<typeof spyOn>;
   let cryptoCreateHashSpy: ReturnType<typeof spyOn>;
   let calculateChecksumSpy: ReturnType<typeof spyOn>;
   let loadJsonFromFileSpy: ReturnType<typeof spyOn>;
@@ -31,12 +30,7 @@ describe('createFileScanner', () => {
       size: 1024,
     }));
     fsReaddirSyncSpy = spyOn(fs, 'readdirSync').mockImplementation(() => [
-      {
-        name: 'file1.txt',
-        isDirectory: () => false,
-        isSymbolicLink: () => false,
-        isFile: () => true,
-      },
+      { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
     ]);
     fsExistsSyncSpy = spyOn(fs, 'existsSync').mockImplementation(() => true);
 
@@ -87,7 +81,6 @@ describe('createFileScanner', () => {
     loggerVerboseSpy = spyOn(logger, 'verbose').mockImplementation(() => {});
     loggerInfoSpy = spyOn(logger, 'info').mockImplementation(() => {});
     loggerErrorSpy = spyOn(logger, 'error').mockImplementation(() => {});
-    loggerWarningSpy = spyOn(logger, 'warning').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -104,7 +97,6 @@ describe('createFileScanner', () => {
     loggerVerboseSpy?.mockRestore?.();
     loggerInfoSpy?.mockRestore?.();
     loggerErrorSpy?.mockRestore?.();
-    loggerWarningSpy?.mockRestore?.();
   });
 
   describe('initialization', () => {
@@ -189,12 +181,7 @@ describe('createFileScanner', () => {
       );
 
       fsReaddirSyncSpy.mockImplementation(() => [
-        {
-          name: 'file1.txt',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true,
-        },
+        { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
       ]);
 
       const scanner = createFileScanner('/test/dir');
@@ -218,69 +205,20 @@ describe('createFileScanner', () => {
 
     it('should skip hidden files', async () => {
       fsReaddirSyncSpy.mockImplementation(() => [
-        {
-          name: '.hidden',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true,
-        },
-        {
-          name: 'visible.txt',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true,
-        },
+        { name: '.hidden', isDirectory: () => false, isFile: () => true },
+        { name: 'visible.txt', isDirectory: () => false, isFile: () => true },
       ]);
 
       const scanner = createFileScanner('/test/dir');
       const result = await scanner.scan();
 
       expect(result.allFiles.length).toBe(1);
-    });
-
-    it('should skip symlinks and log a warning', async () => {
-      fsReaddirSyncSpy.mockImplementation(() => [
-        {
-          name: 'real.txt',
-          isDirectory: () => false,
-          isFile: () => true,
-          isSymbolicLink: () => false,
-        },
-        {
-          name: 'link-to-something',
-          isDirectory: () => false,
-          isFile: () => false,
-          isSymbolicLink: () => true,
-        },
-      ]);
-
-      const scanner = createFileScanner('/test/dir');
-      const result = await scanner.scan();
-
-      // Only the real file should appear in the results
-      expect(result.allFiles.length).toBe(1);
-      expect(result.allFiles[0].relativePath).toBe('real.txt');
-      // A warning should have been emitted for the symlink
-      expect(loggerWarningSpy).toHaveBeenCalledWith(
-        expect.stringContaining('link-to-something'),
-        expect.anything(),
-      );
     });
 
     it('should force upload all files when forceUpload is enabled', async () => {
       fsReaddirSyncSpy.mockImplementation(() => [
-        {
-          name: 'file1.txt',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true,
-        },
-        {
-          name: 'file2.txt',
-          isDirectory: () => false,
-          isSymbolicLink: () => false,
-          isFile: () => true,
-        },
+        { name: 'file1.txt', isDirectory: () => false, isFile: () => true },
+        { name: 'file2.txt', isDirectory: () => false, isFile: () => true },
       ]);
 
       const scanner = createFileScanner('/test/dir', 1, true);
