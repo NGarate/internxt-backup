@@ -3,6 +3,39 @@
 All notable changes to this project will be documented in this file.
 
 
+## [2.0.1](https://github.com/NGarate/internxt-backup/compare/v2.0.0...v2.0.1) (2026-02-22)
+
+### Bug Fixes
+
+* **security:** add instance locking to prevent concurrent backup/restore runs ([d0ed007](https://github.com/NGarate/internxt-backup/commit/d0ed007cadf6ce60a6237578b328b13fa4b059dd))
+* **security:** add path traversal protection to upload, restore, and deletion paths ([d3e79e8](https://github.com/NGarate/internxt-backup/commit/d3e79e8c2d54eaf9f8d084c30c999dd7366c57be))
+* **security:** harden lock handling and path safety ([fe2d4a1](https://github.com/NGarate/internxt-backup/commit/fe2d4a1fc6f760f88ebb71bac1853b43dca7c5d7))
+* **security:** move state files from /tmp to ~/.internxt-backup/ with strict permissions ([5476c98](https://github.com/NGarate/internxt-backup/commit/5476c98aa816d1572fb6b85ff94f3bf2d4919cba))
+* **security:** upgrade file integrity hashing from MD5 to SHA-256 ([0ad85bb](https://github.com/NGarate/internxt-backup/commit/0ad85bb4cc7ac67a817267d3bb3375a92dd47134))
+
+### Performance Improvements
+
+* simplify upload worker flow and harden hash cache flush ([9d91411](https://github.com/NGarate/internxt-backup/commit/9d91411e489bd0b45e92236fffa965c767db12f5))
+
+### Code Refactoring
+
+* **core:** add injectable runtime hooks and dedup resolution ([9e52064](https://github.com/NGarate/internxt-backup/commit/9e52064bfed4998c7ef00c40a9a864f60a8d54b6))
+* **upload:** remove legacy hash compatibility code ([fe212a7](https://github.com/NGarate/internxt-backup/commit/fe212a7ef3ec38f239ff9e381fc8c9fc7d8d3b58))
+
+### Tests
+
+* **internxt-service:** add comprehensive behavior tests (~1% → ~60% coverage) ([de1949a](https://github.com/NGarate/internxt-backup/commit/de1949a0b9f38fdd706911084d37237fe5eb2cea))
+* **file-restore:** add comprehensive behavior tests (~1% → ~90% coverage) ([4ccf609](https://github.com/NGarate/internxt-backup/commit/4ccf60989f8f4df1eefc386dfdada02c7a78d258))
+* **scheduler:** add comprehensive behavior tests ([0a8d803](https://github.com/NGarate/internxt-backup/commit/0a8d803883895a23303d72b8276717e8c788c792))
+* **security:** add malformed-JSON, corrupted-baseline, and traversal-deletion tests ([a71509f](https://github.com/NGarate/internxt-backup/commit/a71509f7abf6f24a1c36336e8ced1139eb75e9e2))
+* **core:** complete phase 1-2 security and behavior coverage ([3caacb4](https://github.com/NGarate/internxt-backup/commit/3caacb4bec3a62421bf0e838bfd2bee9e8d19dc2))
+
+### CI/CD
+
+* enforce 70% line coverage threshold in test job ([ad0d705](https://github.com/NGarate/internxt-backup/commit/ad0d705527c240f3f3403590ca83cf702993ea3a))
+* grant release jobs contents write permission ([acd7dac](https://github.com/NGarate/internxt-backup/commit/acd7dacbcb7d72233613b496b18e2041c55788ba))
+* rely on Bun native coverage threshold ([415a400](https://github.com/NGarate/internxt-backup/commit/415a4002d4d3322925b565c19374f5fc9ae579a1))
+
 ## [2.0.0](https://github.com/NGarate/internxt-backup/compare/v1.0.0...v2.0.0) (2026-02-20)
 
 ### ⚠ BREAKING CHANGES
