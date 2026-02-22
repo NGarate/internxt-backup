@@ -47,6 +47,22 @@ export async function syncFiles(
 
   lock();
   try {
+    const normalizeSafeRelativePath = (relativePath: string): string | null => {
+      const normalized = path.posix.normalize(
+        relativePath.replace(/\\/g, '/').replace(/^\/+/, ''),
+      );
+      if (
+        normalized === '' ||
+        normalized === '.' ||
+        normalized === '..' ||
+        normalized.startsWith('../') ||
+        path.posix.isAbsolute(normalized)
+      ) {
+        return null;
+      }
+      return normalized;
+    };
+
     const makeFileScanner = dependencies.createFileScanner ?? createFileScanner;
     const makeUploader = dependencies.createUploader ?? createUploader;
     const makeInternxtService =
@@ -171,7 +187,9 @@ export async function syncFiles(
         logger.info('Syncing deletions to remote...', verbosity);
         const targetDir = options.target || '/';
         for (const relativePath of deletedFiles) {
-          if (relativePath.split('/').some((part) => part === '..')) {
+          const normalizedRelativePath =
+            normalizeSafeRelativePath(relativePath);
+          if (!normalizedRelativePath) {
             logger.warning(
               `Path traversal blocked in deletion: ${relativePath}`,
               verbosity,
@@ -180,8 +198,8 @@ export async function syncFiles(
           }
           const remotePath =
             targetDir === '/'
-              ? `/${relativePath}`
-              : `${targetDir}/${relativePath}`;
+              ? `/${normalizedRelativePath}`
+              : `${targetDir}/${normalizedRelativePath}`;
           const deleted = await internxtService.deleteFile(remotePath);
           if (deleted) {
             logger.success(`Deleted remote: ${remotePath}`, verbosity);

@@ -7,5 +7,10 @@ export function getStateDir(): string {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+  const stats = fs.statSync(dir);
+  if (!stats.isDirectory()) {
+    throw new Error(`State path is not a directory: ${dir}`);
+  }
+  fs.chmodSync(dir, 0o700);
   return dir;
 }

@@ -12,6 +12,7 @@ export function createHashCache(
   verbosity: number = Verbosity.Normal,
 ) {
   const cache = new Map<string, string>();
+  const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 
   const calculateHash = async (filePath: string): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -28,9 +29,19 @@ export function createHashCache(
     try {
       if (fs.existsSync(cachePath)) {
         const data = await fs.promises.readFile(cachePath, 'utf8');
-        const parsed: Record<string, string> = JSON.parse(data);
+        const parsed = JSON.parse(data);
+        if (
+          parsed === null ||
+          typeof parsed !== 'object' ||
+          Array.isArray(parsed)
+        ) {
+          throw new Error('Invalid hash cache format');
+        }
+
         for (const [key, value] of Object.entries(parsed)) {
-          cache.set(key, value);
+          if (typeof value === 'string') {
+            cache.set(key, value);
+          }
         }
         logVerbose(`Loaded hash cache from ${cachePath}`, verbosity);
         return true;
@@ -68,6 +79,15 @@ export function createHashCache(
       if (!storedHash) {
         logVerbose(
           `No cached hash for ${normalizedPath}, marking as changed`,
+          verbosity,
+        );
+        cache.set(normalizedPath, currentHash);
+        return true;
+      }
+
+      if (!SHA256_HEX_PATTERN.test(storedHash)) {
+        logVerbose(
+          `Legacy hash detected for ${normalizedPath}; migrating to SHA-256`,
           verbosity,
         );
         cache.set(normalizedPath, currentHash);

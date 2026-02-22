@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export interface PathInfo {
   normalizedPath: string;
   directory: string;
@@ -9,9 +11,15 @@ export function normalizePathInfo(
   relativePath: string,
   targetDir: string,
 ): PathInfo {
-  const normalizedPath = relativePath.replace(/\\/g, '/');
+  const normalizedPath = path.posix.normalize(relativePath.replace(/\\/g, '/'));
 
-  if (normalizedPath.split('/').some((part) => part === '..')) {
+  if (
+    normalizedPath === '' ||
+    normalizedPath === '.' ||
+    normalizedPath === '..' ||
+    normalizedPath.startsWith('../') ||
+    path.posix.isAbsolute(normalizedPath)
+  ) {
     throw new Error(`Path traversal detected: ${relativePath}`);
   }
   const lastSlashIndex = normalizedPath.lastIndexOf('/');

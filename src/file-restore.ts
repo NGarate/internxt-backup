@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { getOptimalConcurrency } from './utils/env-utils';
 import * as logger from './utils/logger';
 import { acquireLock, releaseLock } from './utils/lock';
@@ -15,6 +16,23 @@ import { matchPattern } from './utils/pattern-utils';
 export async function restoreFiles(options: RestoreOptions): Promise<void> {
   acquireLock();
   try {
+    const normalizeSafeRestorePath = (remotePath: string): string | null => {
+      const sourcePrefix = options.source.replace(/\/+$/, '');
+      const relative = remotePath.replace(sourcePrefix, '').replace(/^\/+/, '');
+      const normalized = path.posix.normalize(relative.replace(/\\/g, '/'));
+
+      if (
+        normalized === '' ||
+        normalized === '.' ||
+        normalized === '..' ||
+        normalized.startsWith('../') ||
+        path.posix.isAbsolute(normalized)
+      ) {
+        return null;
+      }
+      return normalized;
+    };
+
     const verbosity = options.quiet
       ? Verbosity.Quiet
       : options.verbose
@@ -99,6 +117,15 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
         verbosity,
       );
     }
+
+    filesToDownload = filesToDownload.filter((f) => {
+      const normalized = normalizeSafeRestorePath(f.remotePath);
+      if (!normalized) {
+        logger.warning(`Path traversal blocked: ${f.remotePath}`, verbosity);
+        return false;
+      }
+      return true;
+    });
 
     if (filesToDownload.length === 0) {
       logger.success(

@@ -42,18 +42,21 @@ export function createDownloader(
   ): Promise<DownloadResult> => {
     try {
       const sourcePrefix = sourceRemotePath.replace(/\/+$/, '');
-      const relativePath = entry.remotePath
-        .replace(sourcePrefix, '')
-        .replace(/^\//, '');
-
-      const resolvedLocalFile = path.resolve(
-        targetLocalPath,
-        relativePath,
-        entry.name,
+      const relativePath = path.posix.normalize(
+        entry.remotePath
+          .replace(sourcePrefix, '')
+          .replace(/^\/+/, '')
+          .replace(/\\/g, '/'),
       );
+
+      const resolvedLocalFile = path.resolve(targetLocalPath, relativePath);
       if (
-        !resolvedLocalFile.startsWith(resolvedTarget + path.sep) &&
-        resolvedLocalFile !== resolvedTarget
+        relativePath === '' ||
+        relativePath === '.' ||
+        relativePath === '..' ||
+        relativePath.startsWith('../') ||
+        (!resolvedLocalFile.startsWith(resolvedTarget + path.sep) &&
+          resolvedLocalFile !== resolvedTarget)
       ) {
         failedCount++;
         progressTracker.recordFailure();
@@ -65,7 +68,7 @@ export function createDownloader(
         };
       }
 
-      const localDir = path.join(targetLocalPath, path.dirname(relativePath));
+      const localDir = path.dirname(resolvedLocalFile);
 
       if (!fs.existsSync(localDir)) {
         fs.mkdirSync(localDir, { recursive: true });
@@ -77,7 +80,7 @@ export function createDownloader(
         downloadedCount++;
         progressTracker.recordSuccess();
 
-        const localFilePath = path.join(localDir, entry.name);
+        const localFilePath = resolvedLocalFile;
         const meta = fileMetadata[relativePath];
 
         if (verify && meta?.checksum) {
