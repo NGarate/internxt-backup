@@ -17,6 +17,7 @@ describe('CLI', () => {
         '--sync-deletes',
         '--resume',
         '--chunk-size=100',
+        '--dry-run',
         '--quiet',
       ];
 
@@ -31,6 +32,7 @@ describe('CLI', () => {
           'sync-deletes': { type: 'boolean' },
           resume: { type: 'boolean' },
           'chunk-size': { type: 'string' },
+          'dry-run': { type: 'boolean' },
           quiet: { type: 'boolean' },
           verbose: { type: 'boolean' },
           help: { type: 'boolean', short: 'h' },
@@ -47,6 +49,7 @@ describe('CLI', () => {
       expect(values['sync-deletes']).toBe(true);
       expect(values.resume).toBe(true);
       expect(values['chunk-size']).toBe('100');
+      expect(values['dry-run']).toBe(true);
       expect(values.quiet).toBe(true);
     });
 
@@ -105,6 +108,7 @@ describe('CLI', () => {
         '--cores=3',
         '--no-verify',
         '--allow-partial-restore',
+        '--dry-run',
         '--verbose',
       ];
 
@@ -120,6 +124,7 @@ describe('CLI', () => {
           cores: { type: 'string' },
           'no-verify': { type: 'boolean' },
           'allow-partial-restore': { type: 'boolean' },
+          'dry-run': { type: 'boolean' },
           quiet: { type: 'boolean' },
           verbose: { type: 'boolean' },
           help: { type: 'boolean', short: 'h' },
@@ -134,6 +139,7 @@ describe('CLI', () => {
       expect(values.cores).toBe('3');
       expect(values['no-verify']).toBe(true);
       expect(values['allow-partial-restore']).toBe(true);
+      expect(values['dry-run']).toBe(true);
       expect(values.verbose).toBe(true);
     });
   });

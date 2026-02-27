@@ -445,6 +445,70 @@ describe('syncFiles', () => {
       expect(deleteFile).not.toHaveBeenCalled();
     });
 
+    it('should not perform uploads, deletions, or baseline updates in dry-run mode', async () => {
+      const files: FileInfo[] = [createFile('changed.txt', 'new-checksum')];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: files,
+        totalSizeBytes: files[0].size,
+        totalSizeMB: '0.00',
+      };
+
+      const mockScanner = {
+        ...createMockFileScanner(),
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const deleteFile = mock(() => Promise.resolve(true));
+      mockInternxt.deleteFile = deleteFile;
+
+      const mockBackupState = createMockBackupState();
+      mockBackupState.getBaseline = mock(() => null);
+      mockBackupState.detectDeletions = mock(() => ['removed.txt']);
+
+      const startUpload = mock(() =>
+        Promise.resolve({
+          success: true,
+          totalFiles: 1,
+          succeededFiles: 1,
+          failedFiles: 0,
+          failedPaths: [],
+        }),
+      );
+      const mockUploader = {
+        startUpload,
+        setFileScanner: mock(() => {}),
+        handleFileUpload: mock(() =>
+          Promise.resolve({ success: true, filePath: 'changed.txt' }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
+      };
+
+      await syncFiles(
+        '/source',
+        { target: '/Backups', syncDeletes: true, dryRun: true },
+        dependencies,
+      );
+
+      expect(startUpload).not.toHaveBeenCalled();
+      expect(deleteFile).not.toHaveBeenCalled();
+      expect(mockBackupState.saveBaseline).not.toHaveBeenCalled();
+      expect(mockBackupState.uploadManifest).not.toHaveBeenCalled();
+    });
+
     it('should skip deletion when detectDeletions returns Windows-style traversal paths', async () => {
       const scanResult: ScanResult = {
         allFiles: [

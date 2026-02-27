@@ -22,6 +22,7 @@ export interface SyncOptions {
   chunkSize?: number;
   full?: boolean;
   syncDeletes?: boolean;
+  dryRun?: boolean;
 }
 
 export interface SyncDependencies {
@@ -173,6 +174,24 @@ export async function syncFiles(
       scanResult.allFiles.map((f) => f.relativePath),
     );
     const deletedFiles = backupState.detectDeletions(currentPaths);
+
+    if (options.dryRun) {
+      logger.info(
+        `Dry run: ${filesToUpload.length} files would be uploaded.`,
+        verbosity,
+      );
+      if (options.syncDeletes) {
+        logger.info(
+          `Dry run: ${deletedFiles.length} files would be deleted from remote storage.`,
+          verbosity,
+        );
+      }
+      logger.success(
+        'Dry run completed. No remote changes were made.',
+        verbosity,
+      );
+      return;
+    }
 
     if (deletedFiles.length > 0) {
       logger.warning(

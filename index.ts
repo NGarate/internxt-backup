@@ -23,6 +23,7 @@ function parseBackupArgs(args: string[]) {
       'sync-deletes': { type: 'boolean' },
       resume: { type: 'boolean' },
       'chunk-size': { type: 'string' },
+      'dry-run': { type: 'boolean' },
       quiet: { type: 'boolean' },
       verbose: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
@@ -50,6 +51,7 @@ function parseRestoreArgs(args: string[]) {
       verbose: { type: 'boolean' },
       'no-verify': { type: 'boolean' },
       'allow-partial-restore': { type: 'boolean' },
+      'dry-run': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
     allowPositionals: true,
@@ -76,6 +78,7 @@ ${bold('Backup Options:')}
   --sync-deletes          Delete remote files that were deleted locally
   --resume                Enable resume capability for large files
   --chunk-size=<mb>       Chunk size in MB for large files (default: 50)
+  --dry-run               Preview changes without uploading or deleting remote files
   --quiet                 Show minimal output (only errors and progress)
   --verbose               Show detailed output including per-file operations
   --help, -h              Show this help message
@@ -89,6 +92,7 @@ ${bold('Restore Options:')}
   --cores=<number>        Number of concurrent downloads (default: 2/3 of CPU cores)
   --no-verify             Skip checksum verification after download
   --allow-partial-restore Continue restore even if some files fail or checksums mismatch
+  --dry-run               Preview restore selection without writing local files
   --quiet                 Show minimal output
   --verbose               Show detailed output
 
@@ -162,6 +166,7 @@ async function main() {
         verbose: args.verbose,
         verify: !args['no-verify'],
         allowPartialRestore: args['allow-partial-restore'],
+        dryRun: args['dry-run'],
       });
       return;
     }
@@ -185,6 +190,7 @@ async function main() {
       syncDeletes: args['sync-deletes'],
       resume: args.resume,
       chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
+      dryRun: args['dry-run'],
     };
 
     if (args.daemon && args.schedule) {

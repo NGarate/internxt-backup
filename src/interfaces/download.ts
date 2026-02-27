@@ -20,6 +20,7 @@ export interface RestoreOptions {
   verbose?: boolean;
   verify?: boolean;
   allowPartialRestore?: boolean;
+  dryRun?: boolean;
 }
 
 export interface DownloadResult {

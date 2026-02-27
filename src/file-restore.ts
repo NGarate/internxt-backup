@@ -136,6 +136,18 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
       return;
     }
 
+    if (options.dryRun) {
+      logger.info(
+        `Dry run: ${filesToDownload.length} files would be restored to ${options.target}.`,
+        verbosity,
+      );
+      logger.success(
+        'Dry run completed. No local files were written.',
+        verbosity,
+      );
+      return;
+    }
+
     const concurrency = getOptimalConcurrency(options.cores);
     const progressTracker = createProgressTracker(verbosity, 'Download');
 

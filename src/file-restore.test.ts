@@ -305,6 +305,30 @@ describe('restoreFiles', () => {
       expect(mockDownloader.startDownload).not.toHaveBeenCalled();
     });
 
+    it('should not download files in dry-run mode', async () => {
+      mockInternxt.listFilesRecursive = mock(() =>
+        Promise.resolve([
+          {
+            uuid: 'u1',
+            name: 'file1.txt',
+            remotePath: '/Backups/file1.txt',
+            size: 100,
+            isFolder: false,
+          },
+        ]),
+      );
+
+      const options: RestoreOptions = {
+        source: '/Backups',
+        target: '/tmp/restore',
+        dryRun: true,
+      };
+
+      await restoreFiles(options);
+
+      expect(mockDownloader.startDownload).not.toHaveBeenCalled();
+    });
+
     it('should block path traversal entries before downloader is invoked', async () => {
       mockInternxt.listFilesRecursive = mock(() =>
         Promise.resolve([
