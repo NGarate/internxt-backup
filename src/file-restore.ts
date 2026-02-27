@@ -16,6 +16,7 @@ import { matchPattern } from './utils/pattern-utils';
 export async function restoreFiles(options: RestoreOptions): Promise<void> {
   acquireLock();
   try {
+    const strictRestore = !options.allowPartialRestore;
     const normalizeSafeRestorePath = (remotePath: string): string | null => {
       const sourcePrefix = options.source.replace(/\/+$/, '');
       const relative = remotePath.replace(sourcePrefix, '').replace(/^\/+/, '');
@@ -150,7 +151,7 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
       },
     );
 
-    await downloader.startDownload(filesToDownload);
+    const restoreResult = await downloader.startDownload(filesToDownload);
 
     const stats = downloader.getStats();
     if (stats.verifiedCount > 0) {
@@ -162,6 +163,29 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
     if (stats.verifyFailedCount > 0) {
       logger.warning(
         `Checksum mismatches: ${stats.verifyFailedCount} files`,
+        verbosity,
+      );
+    }
+
+    if (restoreResult.failedCount > 0) {
+      const message = `Restore failed: ${restoreResult.failedCount} files could not be downloaded.`;
+      if (strictRestore) {
+        throw new Error(message);
+      }
+      logger.warning(
+        `${message} Partial restore allowed by configuration.`,
+        verbosity,
+      );
+    }
+
+    const verifyChecksums = options.verify ?? true;
+    if (verifyChecksums && restoreResult.verifyFailedCount > 0) {
+      const message = `Restore verification failed: ${restoreResult.verifyFailedCount} files had checksum mismatches.`;
+      if (strictRestore) {
+        throw new Error(message);
+      }
+      logger.warning(
+        `${message} Partial restore allowed by configuration.`,
         verbosity,
       );
     }

@@ -236,7 +236,16 @@ export function createMockBackupState(): BackupState {
  */
 export function createMockDownloader(): Downloader {
   return {
-    startDownload: mock(() => Promise.resolve()),
+    startDownload: mock(() =>
+      Promise.resolve({
+        success: true,
+        totalFiles: 0,
+        downloadedCount: 0,
+        failedCount: 0,
+        verifiedCount: 0,
+        verifyFailedCount: 0,
+      }),
+    ),
     handleFileDownload: mock(() =>
       Promise.resolve({
         success: true,

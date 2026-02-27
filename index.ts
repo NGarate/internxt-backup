@@ -49,6 +49,7 @@ function parseRestoreArgs(args: string[]) {
       quiet: { type: 'boolean' },
       verbose: { type: 'boolean' },
       'no-verify': { type: 'boolean' },
+      'allow-partial-restore': { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
     },
     allowPositionals: true,
@@ -87,6 +88,7 @@ ${bold('Restore Options:')}
   --path=<subdir>         Restore only a specific subdirectory
   --cores=<number>        Number of concurrent downloads (default: 2/3 of CPU cores)
   --no-verify             Skip checksum verification after download
+  --allow-partial-restore Continue restore even if some files fail or checksums mismatch
   --quiet                 Show minimal output
   --verbose               Show detailed output
 
@@ -159,6 +161,7 @@ async function main() {
         quiet: args.quiet,
         verbose: args.verbose,
         verify: !args['no-verify'],
+        allowPartialRestore: args['allow-partial-restore'],
       });
       return;
     }

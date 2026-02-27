@@ -18,6 +18,15 @@ export interface DownloaderOptions {
   fileMetadata?: Record<string, FileMetadata>;
 }
 
+export interface DownloadBatchResult {
+  success: boolean;
+  totalFiles: number;
+  downloadedCount: number;
+  failedCount: number;
+  verifiedCount: number;
+  verifyFailedCount: number;
+}
+
 export function createDownloader(
   maxConcurrency: number,
   sourceRemotePath: string,
@@ -138,10 +147,19 @@ export function createDownloader(
     }
   };
 
-  const startDownload = async (files: RemoteFileEntry[]): Promise<void> => {
+  const startDownload = async (
+    files: RemoteFileEntry[],
+  ): Promise<DownloadBatchResult> => {
     if (files.length === 0) {
       logger.success('No files to download.', verbosity);
-      return;
+      return {
+        success: true,
+        totalFiles: 0,
+        downloadedCount: 0,
+        failedCount: 0,
+        verifiedCount: 0,
+        verifyFailedCount: 0,
+      };
     }
 
     downloadedCount = 0;
@@ -158,11 +176,31 @@ export function createDownloader(
     progressTracker.startProgressUpdates();
 
     try {
-      await processPool(files, handleFileDownload, maxConcurrency);
+      const results = await processPool(
+        files,
+        handleFileDownload,
+        maxConcurrency,
+      );
+      const thrownFailures = results.filter((result) => !result.success).length;
+      if (thrownFailures > 0) {
+        failedCount += thrownFailures;
+        for (let i = 0; i < thrownFailures; i++) {
+          progressTracker.recordFailure();
+        }
+      }
       progressTracker.displaySummary();
     } finally {
       progressTracker.stopProgressUpdates();
     }
+
+    return {
+      success: failedCount === 0 && verifyFailedCount === 0,
+      totalFiles: files.length,
+      downloadedCount,
+      failedCount,
+      verifiedCount,
+      verifyFailedCount,
+    };
   };
 
   const getStats = () => ({

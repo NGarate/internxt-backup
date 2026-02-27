@@ -104,6 +104,7 @@ describe('CLI', () => {
         '--path=2025/',
         '--cores=3',
         '--no-verify',
+        '--allow-partial-restore',
         '--verbose',
       ];
 
@@ -118,6 +119,7 @@ describe('CLI', () => {
           path: { type: 'string' },
           cores: { type: 'string' },
           'no-verify': { type: 'boolean' },
+          'allow-partial-restore': { type: 'boolean' },
           quiet: { type: 'boolean' },
           verbose: { type: 'boolean' },
           help: { type: 'boolean', short: 'h' },
@@ -131,6 +133,7 @@ describe('CLI', () => {
       expect(values.path).toBe('2025/');
       expect(values.cores).toBe('3');
       expect(values['no-verify']).toBe(true);
+      expect(values['allow-partial-restore']).toBe(true);
       expect(values.verbose).toBe(true);
     });
   });

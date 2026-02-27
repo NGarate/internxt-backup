@@ -357,6 +357,7 @@ describe('restoreFiles', () => {
         source: '/Backups',
         target: '/tmp/restore',
         verify: true,
+        allowPartialRestore: true,
       };
 
       await restoreFiles(options);
@@ -368,6 +369,87 @@ describe('restoreFiles', () => {
       expect(warningSpy).toHaveBeenCalledWith(
         expect.stringContaining('Checksum mismatches: 1'),
         expect.anything(),
+      );
+    });
+
+    it('should fail in strict mode when downloads fail', async () => {
+      mockInternxt.listFilesRecursive = mock(() =>
+        Promise.resolve([
+          {
+            uuid: 'u1',
+            name: 'file.txt',
+            remotePath: '/Backups/file.txt',
+            size: 100,
+            isFolder: false,
+          },
+        ]),
+      );
+
+      mockDownloader.startDownload = mock(() =>
+        Promise.resolve({
+          success: false,
+          totalFiles: 1,
+          downloadedCount: 0,
+          failedCount: 1,
+          verifiedCount: 0,
+          verifyFailedCount: 0,
+        }),
+      );
+      mockDownloader.getStats = mock(() => ({
+        downloadedCount: 0,
+        failedCount: 1,
+        verifiedCount: 0,
+        verifyFailedCount: 0,
+      }));
+
+      const options: RestoreOptions = {
+        source: '/Backups',
+        target: '/tmp/restore',
+      };
+
+      await expect(restoreFiles(options)).rejects.toThrow(
+        'files could not be downloaded',
+      );
+    });
+
+    it('should fail in strict mode when checksum verification fails', async () => {
+      mockInternxt.listFilesRecursive = mock(() =>
+        Promise.resolve([
+          {
+            uuid: 'u1',
+            name: 'file.txt',
+            remotePath: '/Backups/file.txt',
+            size: 100,
+            isFolder: false,
+          },
+        ]),
+      );
+
+      mockDownloader.startDownload = mock(() =>
+        Promise.resolve({
+          success: false,
+          totalFiles: 1,
+          downloadedCount: 1,
+          failedCount: 0,
+          verifiedCount: 0,
+          verifyFailedCount: 1,
+        }),
+      );
+      mockDownloader.getStats = mock(() => ({
+        downloadedCount: 1,
+        failedCount: 0,
+        verifiedCount: 0,
+        verifyFailedCount: 1,
+      }));
+
+      const options: RestoreOptions = {
+        source: '/Backups',
+        target: '/tmp/restore',
+        verify: true,
+      };
+
+      await expect(restoreFiles(options)).rejects.toThrow(
+        'checksum mismatches',
       );
     });
 
