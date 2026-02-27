@@ -69,6 +69,8 @@ describe('createHashCache', () => {
   let fsReadFileSpy: ReturnType<typeof spyOn>;
   let fsWriteFileSpy: ReturnType<typeof spyOn>;
   let fsChmodSpy: ReturnType<typeof spyOn>;
+  let fsRenameSpy: ReturnType<typeof spyOn>;
+  let fsUnlinkSpy: ReturnType<typeof spyOn>;
   let fsCreateReadStreamSpy: ReturnType<typeof spyOn>;
   let originalCreateHash: typeof crypto.createHash;
 
@@ -88,6 +90,12 @@ describe('createHashCache', () => {
     fsChmodSpy = spyOn(fs.promises, 'chmod').mockImplementation(() =>
       Promise.resolve(),
     );
+    fsRenameSpy = spyOn(fs.promises, 'rename').mockImplementation(() =>
+      Promise.resolve(),
+    );
+    fsUnlinkSpy = spyOn(fs.promises, 'unlink').mockImplementation(() =>
+      Promise.resolve(),
+    );
     fsCreateReadStreamSpy = spyOn(fs, 'createReadStream').mockImplementation(
       mockFs.createReadStream,
     );
@@ -102,6 +110,8 @@ describe('createHashCache', () => {
     fsReadFileSpy.mockRestore();
     fsWriteFileSpy.mockRestore();
     fsChmodSpy.mockRestore();
+    fsRenameSpy.mockRestore();
+    fsUnlinkSpy.mockRestore();
     fsCreateReadStreamSpy.mockRestore();
     crypto.createHash = originalCreateHash;
   });

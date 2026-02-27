@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { readFile, writeFile, unlink, chmod } from 'node:fs/promises';
+import { readFile, writeFile, unlink, chmod, rename } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as logger from '../../utils/logger';
@@ -91,13 +91,20 @@ export function createResumableUploader(
 
   const saveState = async (state: ChunkedUploadState): Promise<void> => {
     const statePath = getStateFilePath(state.filePath);
+    const tmpPath = `${statePath}.${process.pid}.${Date.now()}.tmp`;
     try {
-      await writeFile(statePath, JSON.stringify(state, null, 2));
-      await chmod(statePath, 0o600);
+      await writeFile(tmpPath, JSON.stringify(state, null, 2));
+      await chmod(tmpPath, 0o600);
+      await rename(tmpPath, statePath);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.verbose(`Failed to save state: ${errorMessage}`, verbosity);
+      try {
+        await unlink(tmpPath);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
   };
 

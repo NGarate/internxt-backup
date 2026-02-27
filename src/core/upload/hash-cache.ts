@@ -55,16 +55,23 @@ export function createHashCache(
   };
 
   const save = async (): Promise<boolean> => {
+    const tmpPath = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
     try {
       const obj = Object.fromEntries(cache);
-      await fs.promises.writeFile(cachePath, JSON.stringify(obj, null, 2));
-      await fs.promises.chmod(cachePath, 0o600);
+      await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2));
+      await fs.promises.chmod(tmpPath, 0o600);
+      await fs.promises.rename(tmpPath, cachePath);
       logVerbose(`Saved hash cache to ${cachePath}`, verbosity);
       return true;
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logVerbose(`Error saving hash cache: ${errorMessage}`, verbosity);
+      try {
+        await fs.promises.unlink(tmpPath);
+      } catch {
+        // Ignore cleanup errors.
+      }
       return false;
     }
   };
