@@ -69,6 +69,16 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
     }
   };
 
+  const resolveRemoteFileName = (file: {
+    plainName: string;
+    type?: string;
+  }): string => {
+    if (!file.type) {
+      return file.plainName;
+    }
+    return `${file.plainName}.${file.type}`;
+  };
+
   const findFolderInParent = async (
     parentUuid: string,
     name: string,
@@ -83,18 +93,7 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
     fileName: string,
   ): Promise<{ uuid: string; plainName: string; size: number } | null> => {
     const { files } = await listFolderContents(folderUuid);
-    const file = files.find((f) => {
-      if (f.plainName === fileName) {
-        return true;
-      }
-      if (f.type) {
-        const fullName = `${f.plainName}.${f.type}`;
-        if (fullName === fileName) {
-          return true;
-        }
-      }
-      return false;
-    });
+    const file = files.find((f) => resolveRemoteFileName(f) === fileName);
     return file || null;
   };
 
@@ -524,11 +523,11 @@ export function createInternxtService(options: InternxtServiceOptions = {}) {
           uuid: folder.uuid,
         })),
         ...files.map((file) => ({
-          name: file.plainName,
+          name: resolveRemoteFileName(file),
           path:
             remotePath === '/'
-              ? `/${file.plainName}`
-              : `${remotePath}/${file.plainName}`,
+              ? `/${resolveRemoteFileName(file)}`
+              : `${remotePath}/${resolveRemoteFileName(file)}`,
           size: file.size,
           isFolder: false,
           uuid: file.uuid,

@@ -226,7 +226,8 @@ describe('createInternxtService', () => {
       const folderItem = result.files.find((f) => f.isFolder);
       const fileItem = result.files.find((f) => !f.isFolder);
       expect(folderItem?.name).toBe('subfolder');
-      expect(fileItem?.name).toBe('test');
+      expect(fileItem?.name).toBe('test.txt');
+      expect(fileItem?.path).toBe('/test.txt');
     });
 
     it('should return failure when folder cannot be resolved', async () => {
