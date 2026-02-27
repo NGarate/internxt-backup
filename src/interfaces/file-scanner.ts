@@ -33,6 +33,8 @@ export interface BaselineSnapshot {
   sourceDir: string;
   targetDir: string;
   files: Record<string, FileMetadata>;
+  signatureAlgorithm?: string;
+  signature?: string;
 }
 
 /**

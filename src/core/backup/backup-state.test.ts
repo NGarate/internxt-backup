@@ -10,6 +10,7 @@ import {
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHmac } from 'node:crypto';
 import { createBackupState } from './backup-state';
 import { FileInfo, BaselineSnapshot } from '../../interfaces/file-scanner';
 import * as fsUtils from '../../utils/fs-utils';
@@ -28,10 +29,12 @@ describe('BackupState', () => {
     getStateDirSpy = spyOn(stateDirModule, 'getStateDir').mockImplementation(
       () => tempStateDir,
     );
+    delete process.env.INTERNXT_BACKUP_MANIFEST_HMAC_KEY;
     backupState = createBackupState(0);
   });
 
   afterEach(() => {
+    delete process.env.INTERNXT_BACKUP_MANIFEST_HMAC_KEY;
     getStateDirSpy.mockRestore();
     fs.rmSync(tempStateDir, { recursive: true, force: true });
   });
@@ -431,6 +434,121 @@ describe('BackupState', () => {
           '/Backups',
         );
         expect(result).toEqual(snapshot);
+      } finally {
+        loadJsonSpy.mockRestore();
+      }
+    });
+
+    it('should verify signed manifest when hmac key is configured', async () => {
+      const unsignedSnapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-02T00:00:00Z',
+        sourceDir: '/src',
+        targetDir: '/Backups',
+        files: {
+          'a.txt': {
+            checksum: 'abc',
+            size: 1,
+            mode: 0o644,
+            mtime: '2026-01-02T00:00:00Z',
+          },
+        },
+      };
+      const hmacKey = 'test-key';
+      process.env.INTERNXT_BACKUP_MANIFEST_HMAC_KEY = hmacKey;
+      const signature = createHmac('sha256', hmacKey)
+        .update(JSON.stringify(unsignedSnapshot))
+        .digest('hex');
+      const signedSnapshot: BaselineSnapshot = {
+        ...unsignedSnapshot,
+        signatureAlgorithm: 'hmac-sha256',
+        signature,
+      };
+
+      const mockInternxt = createMockInternxtService();
+      mockInternxt.listFiles = () =>
+        Promise.resolve({
+          success: true,
+          files: [
+            {
+              name: '.internxt-backup-meta.json',
+              path: '/Backups/.internxt-backup-meta.json',
+              size: 10,
+              isFolder: false,
+              uuid: 'manifest-uuid',
+            },
+          ],
+        });
+      mockInternxt.downloadFile = () =>
+        Promise.resolve({
+          success: true,
+          fileId: 'manifest-uuid',
+          localPath: '/tmp',
+        });
+      const loadJsonSpy = spyOn(fsUtils, 'loadJsonFromFile').mockImplementation(
+        () => Promise.resolve(signedSnapshot),
+      );
+
+      try {
+        const result = await backupState.downloadManifest(
+          mockInternxt,
+          '/Backups',
+        );
+        expect(result).toEqual(signedSnapshot);
+      } finally {
+        loadJsonSpy.mockRestore();
+      }
+    });
+
+    it('should reject signed manifest when signature is invalid', async () => {
+      const signedSnapshot: BaselineSnapshot = {
+        version: 1,
+        timestamp: '2026-01-02T00:00:00Z',
+        sourceDir: '/src',
+        targetDir: '/Backups',
+        files: {
+          'a.txt': {
+            checksum: 'abc',
+            size: 1,
+            mode: 0o644,
+            mtime: '2026-01-02T00:00:00Z',
+          },
+        },
+        signatureAlgorithm: 'hmac-sha256',
+        signature: 'bad-signature',
+      };
+      process.env.INTERNXT_BACKUP_MANIFEST_HMAC_KEY = 'test-key';
+
+      const mockInternxt = createMockInternxtService();
+      mockInternxt.listFiles = () =>
+        Promise.resolve({
+          success: true,
+          files: [
+            {
+              name: '.internxt-backup-meta.json',
+              path: '/Backups/.internxt-backup-meta.json',
+              size: 10,
+              isFolder: false,
+              uuid: 'manifest-uuid',
+            },
+          ],
+        });
+      mockInternxt.downloadFile = () =>
+        Promise.resolve({
+          success: true,
+          fileId: 'manifest-uuid',
+          localPath: '/tmp',
+        });
+      const loadJsonSpy = spyOn(fsUtils, 'loadJsonFromFile').mockImplementation(
+        () => Promise.resolve(signedSnapshot),
+      );
+
+      try {
+        const result = await backupState.downloadManifest(
+          mockInternxt,
+          '/Backups',
+        );
+        expect(result).toBeNull();
       } finally {
         loadJsonSpy.mockRestore();
       }

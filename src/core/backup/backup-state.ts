@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'node:crypto';
 import { loadJsonFromFile, saveJsonToFile } from '../../utils/fs-utils';
 import { getStateDir } from '../../utils/state-dir';
 import {
@@ -11,6 +12,42 @@ import { InternxtService } from '../internxt/internxt-service';
 import * as logger from '../../utils/logger';
 
 const MANIFEST_FILENAME = '.internxt-backup-meta.json';
+const MANIFEST_SIGNATURE_ALGORITHM = 'hmac-sha256';
+const MANIFEST_HMAC_ENV_VAR = 'INTERNXT_BACKUP_MANIFEST_HMAC_KEY';
+
+function createSignaturePayload(snapshot: BaselineSnapshot): string {
+  const {
+    signature: _signature,
+    signatureAlgorithm: _signatureAlgorithm,
+    ...unsignedSnapshot
+  } = snapshot;
+  return JSON.stringify(unsignedSnapshot);
+}
+
+function signManifest(
+  snapshot: BaselineSnapshot,
+  hmacKey: string,
+): BaselineSnapshot {
+  const payload = createSignaturePayload(snapshot);
+  const signature = crypto
+    .createHmac('sha256', hmacKey)
+    .update(payload)
+    .digest('hex');
+  return {
+    ...snapshot,
+    signatureAlgorithm: MANIFEST_SIGNATURE_ALGORITHM,
+    signature,
+  };
+}
+
+function signaturesMatch(expected: string, actual: string): boolean {
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  const actualBuffer = Buffer.from(actual, 'hex');
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+}
 
 export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
   const baselinePath = path.join(
@@ -101,7 +138,12 @@ export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
     }
 
     const tmpManifest = path.join(getStateDir(), MANIFEST_FILENAME);
-    await saveJsonToFile(tmpManifest, baseline);
+    const hmacKey = process.env[MANIFEST_HMAC_ENV_VAR]?.trim();
+    const manifestPayload =
+      hmacKey && hmacKey.length > 0
+        ? signManifest(baseline, hmacKey)
+        : baseline;
+    await saveJsonToFile(tmpManifest, manifestPayload);
 
     const remotePath =
       targetDir === '/'
@@ -172,6 +214,61 @@ export function createBackupState(verbosity: number = logger.Verbosity.Normal) {
     }
 
     if (manifest) {
+      const hmacKey = process.env[MANIFEST_HMAC_ENV_VAR]?.trim();
+      const requiresSignatureVerification = Boolean(
+        hmacKey && hmacKey.length > 0,
+      );
+      const hasSignature = Boolean(manifest.signature);
+
+      if (requiresSignatureVerification && !hasSignature) {
+        logger.warning(
+          `Manifest verification failed: no signature present. Configure backups with ${MANIFEST_HMAC_ENV_VAR}.`,
+          verbosity,
+        );
+        return null;
+      }
+
+      if (hasSignature) {
+        if (!hmacKey || hmacKey.length === 0) {
+          logger.warning(
+            `Manifest is signed but ${MANIFEST_HMAC_ENV_VAR} is not set. Refusing to trust unsigned verification context.`,
+            verbosity,
+          );
+          return null;
+        }
+
+        if (
+          manifest.signatureAlgorithm &&
+          manifest.signatureAlgorithm !== MANIFEST_SIGNATURE_ALGORITHM
+        ) {
+          logger.warning(
+            `Unsupported manifest signature algorithm: ${manifest.signatureAlgorithm}`,
+            verbosity,
+          );
+          return null;
+        }
+
+        const expectedSignature = signManifest(
+          {
+            ...manifest,
+            signature: undefined,
+            signatureAlgorithm: undefined,
+          },
+          hmacKey,
+        ).signature;
+
+        if (
+          !expectedSignature ||
+          !signaturesMatch(expectedSignature, manifest.signature!)
+        ) {
+          logger.warning(
+            'Manifest signature verification failed. Refusing to use checksum metadata.',
+            verbosity,
+          );
+          return null;
+        }
+      }
+
       logger.verbose(
         `Downloaded manifest from ${manifest.timestamp} with ${Object.keys(manifest.files).length} files`,
         verbosity,
