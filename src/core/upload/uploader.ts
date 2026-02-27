@@ -20,6 +20,14 @@ export interface UploaderDeps {
   resumableUploader?: ResumableUploader;
 }
 
+export interface UploadBatchResult {
+  success: boolean;
+  totalFiles: number;
+  succeededFiles: number;
+  failedFiles: number;
+  failedPaths: string[];
+}
+
 export function createUploader(
   maxConcurrency: number,
   targetDir: string,
@@ -208,13 +216,16 @@ export function createUploader(
     }
   };
 
-  const startUpload = async (filesToUpload: FileInfo[]): Promise<void> => {
+  const startUpload = async (
+    filesToUpload: FileInfo[],
+  ): Promise<UploadBatchResult> => {
     await hashCache.load();
     hashCacheDirty = false;
     uploadedFiles.clear();
     createdDirectories.clear();
     inFlightDirectoryCreations.clear();
     isBatchUploading = true;
+    const totalFiles = filesToUpload.length;
 
     const cliStatus = await internxtService.checkCLI();
     if (!cliStatus.installed || !cliStatus.authenticated) {
@@ -223,7 +234,13 @@ export function createUploader(
         logger.error(cliStatus.error);
       }
       isBatchUploading = false;
-      return;
+      return {
+        success: false,
+        totalFiles,
+        succeededFiles: 0,
+        failedFiles: totalFiles,
+        failedPaths: filesToUpload.map((file) => file.relativePath),
+      };
     }
 
     if (normalizedTargetDir) {
@@ -232,12 +249,28 @@ export function createUploader(
         `Target directory result: ${dirResult ? 'success' : 'failed'}`,
         verbosity,
       );
+      if (!dirResult) {
+        isBatchUploading = false;
+        return {
+          success: false,
+          totalFiles,
+          succeededFiles: 0,
+          failedFiles: totalFiles,
+          failedPaths: filesToUpload.map((file) => file.relativePath),
+        };
+      }
     }
 
     if (filesToUpload.length === 0) {
       logger.success('All files are up to date.', verbosity);
       isBatchUploading = false;
-      return;
+      return {
+        success: true,
+        totalFiles: 0,
+        succeededFiles: 0,
+        failedFiles: 0,
+        failedPaths: [],
+      };
     }
 
     // Pre-create unique directories
@@ -255,7 +288,27 @@ export function createUploader(
         `Pre-creating ${uniqueDirs.length} unique directories...`,
         verbosity,
       );
-      await processPool(uniqueDirs, ensureDirectoryExists, maxConcurrency);
+      const directoryResults = await processPool(
+        uniqueDirs,
+        ensureDirectoryExists,
+        maxConcurrency,
+      );
+      const failedDirectories = directoryResults
+        .filter((result) => !result.success || !result.value)
+        .map((result) => result.item);
+      if (failedDirectories.length > 0) {
+        logger.error(
+          `Failed to create ${failedDirectories.length} remote directories before upload.`,
+        );
+        isBatchUploading = false;
+        return {
+          success: false,
+          totalFiles,
+          succeededFiles: 0,
+          failedFiles: totalFiles,
+          failedPaths: filesToUpload.map((file) => file.relativePath),
+        };
+      }
     }
 
     logger.info(
@@ -266,16 +319,49 @@ export function createUploader(
     progressTracker.initialize(filesToUpload.length);
     progressTracker.startProgressUpdates();
 
+    let uploadResult: UploadBatchResult = {
+      success: true,
+      totalFiles,
+      succeededFiles: totalFiles,
+      failedFiles: 0,
+      failedPaths: [],
+    };
+
     try {
-      await processUploads(filesToUpload, handleFileUpload, maxConcurrency);
+      const results = await processUploads(
+        filesToUpload,
+        handleFileUpload,
+        maxConcurrency,
+      );
+      const failedPaths = results
+        .filter((result) => !result.success || !result.value.success)
+        .map((result) =>
+          result.success ? result.value.filePath : result.item.relativePath,
+        );
+      const failedFiles = failedPaths.length;
+      const succeededFiles = totalFiles - failedFiles;
+      uploadResult = {
+        success: failedFiles === 0,
+        totalFiles,
+        succeededFiles,
+        failedFiles,
+        failedPaths,
+      };
+
       await flushHashCache();
 
-      if (fileScanner) {
+      if (fileScanner && uploadResult.success) {
         fileScanner.recordCompletion();
         await fileScanner.saveState();
       }
 
       progressTracker.displaySummary();
+
+      if (!uploadResult.success) {
+        logger.error(
+          `Upload completed with ${uploadResult.failedFiles} failed files.`,
+        );
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -285,10 +371,19 @@ export function createUploader(
       if (fileScanner) {
         await fileScanner.saveState();
       }
+      uploadResult = {
+        success: false,
+        totalFiles,
+        succeededFiles: 0,
+        failedFiles: totalFiles,
+        failedPaths: filesToUpload.map((file) => file.relativePath),
+      };
     } finally {
       progressTracker.stopProgressUpdates();
       isBatchUploading = false;
     }
+
+    return uploadResult;
   };
 
   return { startUpload, handleFileUpload, setFileScanner };

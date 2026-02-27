@@ -210,14 +210,22 @@ export async function syncFiles(
       }
     }
 
+    let uploadSucceeded = true;
     if (filesToUpload.length === 0) {
       logger.success('All files are up to date. Nothing to upload.', verbosity);
     } else {
-      await uploader.startUpload(filesToUpload);
+      const uploadResult = await uploader.startUpload(filesToUpload);
+      uploadSucceeded = uploadResult.success;
+      if (!uploadResult.success) {
+        const preview = uploadResult.failedPaths.slice(0, 5).join(', ');
+        throw new Error(
+          `Backup failed: ${uploadResult.failedFiles} uploads did not complete. Failed files: ${preview}`,
+        );
+      }
     }
 
     // Save baseline and upload manifest after successful backup
-    if (options.full || filesToUpload.length > 0) {
+    if (uploadSucceeded && (options.full || filesToUpload.length > 0)) {
       const snapshot = backupState.createBaselineFromScan(
         sourceDir,
         options.target || '/',

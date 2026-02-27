@@ -143,7 +143,15 @@ describe('syncFiles', () => {
       };
       mockBackupState.createBaselineFromScan = mock(() => snapshot);
 
-      const startUpload = mock(() => Promise.resolve());
+      const startUpload = mock(() =>
+        Promise.resolve({
+          success: true,
+          totalFiles: 1,
+          succeededFiles: 1,
+          failedFiles: 0,
+          failedPaths: [],
+        }),
+      );
       const setFileScanner = mock(() => {});
       const mockUploader = {
         startUpload,
@@ -243,7 +251,15 @@ describe('syncFiles', () => {
       mockBackupState.detectDeletions = mock(() => ['removed.txt']);
       mockBackupState.createBaselineFromScan = mock(() => snapshot);
 
-      const startUpload = mock(() => Promise.resolve());
+      const startUpload = mock(() =>
+        Promise.resolve({
+          success: true,
+          totalFiles: 2,
+          succeededFiles: 2,
+          failedFiles: 0,
+          failedPaths: [],
+        }),
+      );
       const setFileScanner = mock(() => {});
       const mockUploader = {
         startUpload,
@@ -294,6 +310,65 @@ describe('syncFiles', () => {
       );
     });
 
+    it('should fail and avoid baseline/manifest updates when uploads are incomplete', async () => {
+      const files: FileInfo[] = [createFile('changed.txt', 'new-checksum')];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: files,
+        totalSizeBytes: files.reduce((total, file) => total + file.size, 0),
+        totalSizeMB: '0.00',
+      };
+
+      const scannerBase = createMockFileScanner();
+      const mockScanner = {
+        ...scannerBase,
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      const mockBackupState = createMockBackupState();
+
+      const startUpload = mock(() =>
+        Promise.resolve({
+          success: false,
+          totalFiles: 1,
+          succeededFiles: 0,
+          failedFiles: 1,
+          failedPaths: ['changed.txt'],
+        }),
+      );
+      const mockUploader = {
+        startUpload,
+        setFileScanner: mock(() => {}),
+        handleFileUpload: mock(() =>
+          Promise.resolve({
+            success: false,
+            filePath: 'changed.txt',
+          }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
+      };
+
+      await expect(
+        syncFiles('/source', { target: '/Backups' }, dependencies),
+      ).rejects.toThrow('uploads did not complete');
+
+      expect(mockBackupState.saveBaseline).not.toHaveBeenCalled();
+      expect(mockBackupState.uploadManifest).not.toHaveBeenCalled();
+    });
+
     it('should skip deletion when detectDeletions returns a path containing ..', async () => {
       const files: FileInfo[] = [createFile('ok.txt', 'hash')];
       const scanResult: ScanResult = {
@@ -333,7 +408,15 @@ describe('syncFiles', () => {
       }));
 
       const mockUploader = {
-        startUpload: mock(() => Promise.resolve()),
+        startUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            totalFiles: 1,
+            succeededFiles: 1,
+            failedFiles: 0,
+            failedPaths: [],
+          }),
+        ),
         setFileScanner: mock(() => {}),
         handleFileUpload: mock(() =>
           Promise.resolve({ success: true, filePath: 'ok.txt' }),
@@ -404,7 +487,15 @@ describe('syncFiles', () => {
       }));
 
       const mockUploader = {
-        startUpload: mock(() => Promise.resolve()),
+        startUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            totalFiles: 1,
+            succeededFiles: 1,
+            failedFiles: 0,
+            failedPaths: [],
+          }),
+        ),
         setFileScanner: mock(() => {}),
         handleFileUpload: mock(() =>
           Promise.resolve({ success: true, filePath: 'ok.txt' }),
