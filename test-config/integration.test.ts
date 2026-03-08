@@ -1,33 +1,32 @@
 /**
  * Integration Tests for Internxt Backup CLI Tool
  *
- * NOTE: This file serves as documentation of what integration tests would test,
- * but it doesn't implement them because they would require a complex mocking setup
- * that is difficult to implement in the Bun test environment.
+ * NOTE:
+ * This file is currently a placeholder. The project still needs a real
+ * Internxt-backed integration or E2E harness that exercises the full stack.
  *
- * The following functionality is tested in separate unit tests:
+ * The following areas are already covered by unit or behavior tests:
  * - `uploader.test.ts` tests the core file upload functionality
  * - `file-scanner.test.ts` tests the directory scanning and checksum calculation
  * - `internxt-service.test.ts` tests the Internxt CLI integration
  * - `scheduler.test.ts` tests the backup scheduling functionality
- * - `resumable-uploader.test.ts` tests the large file upload with resume capability
+ * - `resumable-uploader.test.ts` tests the current large-file retry-state flow
  * - `file-sync.test.ts` tests the main sync orchestration
  * - `index.test.ts` tests the CLI argument parsing and main flow
  *
- * The main integration points that would be tested here include:
+ * A future real E2E suite should cover:
  * 1. Complete workflow with default settings
- * 2. Help text display and exiting
- * 3. Error handling when sourceDir is not provided
+ * 2. Differential backup after a saved baseline
+ * 3. Restore with checksum verification
  * 4. Error handling when Internxt CLI is not installed
  * 5. Error handling when not authenticated with Internxt
- * 6. Connecting to Internxt Drive with CLI
- * 7. Success message when no files need to be uploaded
- * 8. Error handling during upload process
- * 9. Resume capability for large files
- * 10. Scheduled backup daemon mode
+ * 6. Provider-side upload and download failures
+ * 7. Delete sync behavior
+ * 8. Scheduled backup daemon mode
+ * 9. Auth expiry during long operations
+ * 10. Release-blocking smoke validation
  *
- * These tests are better suited for end-to-end testing with a real environment
- * or more advanced mocking frameworks beyond the scope of this project.
+ * Until that exists, this test documents the missing coverage area explicitly.
  */
 
 import { describe, it, expect } from 'bun:test';

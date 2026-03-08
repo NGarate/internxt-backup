@@ -1,4 +1,4 @@
-# Bun Configuration for WebDAV Backup
+# Bun configuration for internxt-backup
 
 telemetry = false
 

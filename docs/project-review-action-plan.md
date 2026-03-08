@@ -1,231 +1,146 @@
-# Project Review & Action Plan
+# Project Review And Execution Plan
 
-**Date:** 2026-02-21
-**Project:** internxt-backup
-**Scope:** Architecture, design patterns, CLI/backup best practices, security
+Date: 2026-03-08
+Project: internxt-backup
+Scope: current status, remaining risks, and recommended execution order
 
----
+## Executive Summary
 
-## Architecture Assessment
+The project is in a materially better state than the original February 2026
+review:
 
-### Strengths
+- The major early security issues around `/tmp` state, weak hashing, traversal
+  protection, and missing instance locking have been addressed.
+- Behavior coverage is now strong across `internxt-service`, `file-restore`,
+  `scheduler`, and other critical flows.
+- The local quality gate is healthy: lint, format, typecheck, tests, coverage,
+  and build all pass.
 
-- Clean layered architecture: CLI → orchestrators → core services → utilities
-- Factory pattern (`createXxx()`) for all services — simple, testable, no DI container overhead
-- Good separation of concerns: scanning, hashing, uploading, scheduling, progress tracking are all independent modules
-- Proper concurrency control via `work-pool.ts` with in-flight dedup for directory creation
-- Differential backup support with baseline snapshots and manifest versioning
-- Resumable chunked uploads for large files (>100MB) with exponential backoff
+The project is not done. The main open risks have shifted from foundational
+correctness to contract clarity, operational hardening, and end-to-end proof.
 
-### Weaknesses
+## What Changed Since The Initial Review
 
-- No DI container means tests rely on `(instance as any).service = mock` — fragile
-- Services instantiated inside closures; no lifecycle management
-- No instance locking — multiple CLI invocations share the same `/tmp` state files and will corrupt each other
-- Error recovery is limited: 3 retries then give up, no persistent retry queue
+Resolved since the earlier assessment:
 
----
+- Dedicated state directory under `~/.internxt-backup/`
+- Strict state permissions and lock-file handling
+- SHA-256 for local integrity checks
+- Path traversal protection in backup and restore flows
+- Dry-run support for backup and restore
+- Stronger behavior coverage in previously under-tested modules
+- Coverage threshold enforcement through Bun configuration
 
-## Security Assessment
+No longer accurate from the earlier review:
 
-| Issue                                                       | Severity   | Location                                                   |
-| ----------------------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| Predictable `/tmp` paths (world-readable)                   | **HIGH**   | hash-cache, backup-state, file-scanner, resumable-uploader |
-| No path traversal validation on remote paths during restore | **HIGH**   | `file-restore.ts:70-84`, `path-utils.ts`                   |
-| MD5 for integrity verification (cryptographically weak)     | **MEDIUM** | hash-cache, fs-utils, downloader                           |
-| No file locking for shared state files                      | **MEDIUM** | All `/tmp/*.json` files                                    |
-| Auth token expiry not handled during long operations        | **MEDIUM** | internxt-service                                           |
-| Shell escaping is correct (`shellEscape()`)                 | OK         | internxt-service.ts                                        |
-| spawn() uses array args (safe)                              | OK         | internxt-service.ts                                        |
-| File permission restoration masks to `0o7777`               | OK         | downloader.ts                                              |
+- Instance locking is no longer missing
+- `/tmp` state-file exposure is no longer the default design
+- MD5 is no longer the active checksum algorithm for local integrity
+- `file-restore.ts`, `scheduler.ts`, and `internxt-service.ts` are no longer
+  near-zero-coverage modules
 
----
+## Current Validation Snapshot
 
-## Test Coverage Assessment
+Local validation run on 2026-03-08:
 
-| Component                     | Coverage | Quality                                       |
-| ----------------------------- | -------- | --------------------------------------------- |
-| hash-cache.ts                 | ~90%     | Excellent                                     |
-| logger.ts                     | ~90%     | Excellent                                     |
-| uploader.ts                   | ~70%     | Good (critical regressions covered)           |
-| file-scanner.ts               | ~70%     | Good                                          |
-| fs-utils.ts                   | ~80%     | Good                                          |
-| internxt-service.ts (666 LOC) | **~1%**  | **Interface checks only — no behavior tests** |
-| file-restore.ts               | **~1%**  | **Single smoke test**                         |
-| scheduler.ts                  | **~1%**  | **Interface checks only**                     |
-| downloader.ts                 | ~40%     | Basic flows only                              |
+- `bun run check`: pass
+- `bun test --coverage`: pass
+- `bun run build`: pass
+- Tests: `248` passing
+- Line coverage: `92.58%`
 
-No coverage threshold enforced in CI — code can merge with 0% coverage.
+## Current Strengths
 
----
+- Clean architecture: CLI -> orchestrators -> focused core services -> utils
+- Differential backup model with baseline manifests
+- Strict failure behavior in backup and restore paths
+- Strong path-safety posture around upload, restore, and remote deletion flows
+- Parallel work pools and progress tracking are well separated from service
+  logic
+- Good testability through factory-based construction and runtime hooks
 
-## CLI/Backup Tool Best Practices
+## Remaining Risks
 
-| Practice                                         | Status                               |
-| ------------------------------------------------ | ------------------------------------ |
-| Resumable transfers                              | Implemented (>100MB chunked)         |
-| Hash-based change detection                      | Implemented (MD5)                    |
-| Differential/incremental backups                 | Implemented (baseline snapshots)     |
-| Cron scheduling with overlap prevention          | Implemented (croner `protect: true`) |
-| Graceful shutdown (SIGINT/SIGTERM)               | Implemented in scheduler             |
-| Progress display                                 | Implemented (Unicode progress bar)   |
-| Verbosity levels (quiet/normal/verbose)          | Implemented                          |
-| Pre-flight checks (CLI installed, authenticated) | Implemented                          |
-| Checksum verification on restore                 | Implemented (optional, default on)   |
-| File permission preservation                     | Implemented (mode bits in manifest)  |
-| Symlink handling                                 | **Missing**                          |
-| Disk space pre-flight check                      | **Missing**                          |
-| Instance locking (prevent concurrent runs)       | **Missing**                          |
-| Encryption at rest for state files               | **Missing**                          |
-| Bandwidth throttling                             | **Missing**                          |
-| Dry-run mode                                     | **Missing**                          |
+| Risk                                                       | Severity | Why it matters                                                                                          |
+| ---------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| `--resume` is not true chunk resume yet                    | High     | The CLI contract suggests resumability, but the current implementation still retries whole-file uploads |
+| No real E2E suite against Internxt                         | High     | The project lacks proof that the full stack works reliably with the live provider                       |
+| No structured exit codes or run reports                    | Medium   | Automation, observability, and failure handling remain harder than necessary                            |
+| Retry/timeout/auth-expiry handling is incomplete           | Medium   | Long-running jobs still have uneven resilience characteristics                                          |
+| No restore disk preflight or delete confirmation workflow  | Medium   | Long or destructive operations still need stronger operator safeguards                                  |
+| Symlink policy is implicit rather than configurable        | Medium   | Backup behavior around links is not explicit enough for production use                                  |
+| Version metadata and release docs are slightly out of sync | Low      | The release/tag history and local package metadata do not currently tell the same story                 |
 
----
+## Recommended Execution Plan
 
-## Action Plan
+### Phase 1: Define the operational contract
 
-### Phase 1: Security Hardening (Critical)
+Goal:
+Make failures and resumability explicit so the product surface matches reality.
 
-#### 1.1 — Fix temp file security
+Work:
 
-- Create a dedicated state directory under `~/.internxt-backup/` instead of `/tmp/`
-- Set directory permissions to `0o700` (owner-only)
-- Set file permissions to `0o600` on all state/cache files
-- **Files:** `hash-cache.ts`, `backup-state.ts`, `file-scanner.ts`, `resumable-uploader.ts`
+- Define exit codes by failure class
+- Design a machine-readable run-report schema
+- Decide the intended meaning of `--resume`
+- If true chunk resume is not currently feasible, narrow the wording and
+  operator expectations immediately
 
-#### 1.2 — Add path traversal protection
+### Phase 2: Harden runtime behavior
 
-- Add `path.normalize()` + reject any path containing `..` in `path-utils.ts`
-- Add remote path validation in `file-restore.ts` before writing to local filesystem
-- Add validation in `file-sync.ts` deletion detection to prevent deleting outside target
-- Add unit tests for traversal attempts (`../../etc/passwd`, `foo/../../../bar`)
+Goal:
+Reduce the chance of long-running jobs failing in ambiguous or unsafe ways.
 
-#### 1.3 — Add instance locking
+Work:
 
-- Implement a lockfile (`~/.internxt-backup/lock`) with PID
-- Check lock at startup in `file-sync.ts` and `file-restore.ts`
-- Release on exit (including SIGINT/SIGTERM)
-- Prevents state file corruption from concurrent runs
+- Add configurable retries for upload, download, list, and delete
+- Add command timeouts with actionable error messages
+- Detect auth expiry and provide safe recovery behavior
+- Add delete preview and confirmation safeguards
+- Add disk-space preflight checks for restore
+- Add interrupt-safe shutdown summaries
 
-#### 1.4 — Upgrade integrity hashing from MD5 to SHA-256
+### Phase 3: Add real system proof
 
-- Replace `crypto.createHash('md5')` with `crypto.createHash('sha256')` in `fs-utils.ts` and `hash-cache.ts`
-- Add migration logic to handle existing MD5 caches (re-hash on first run)
-- Keep MD5 only for non-security purposes if needed for Internxt API compatibility
+Goal:
+Validate the actual provider integration rather than only mocked behavior.
 
----
+Work:
 
-### Phase 2: Test Coverage (High Priority)
+- Replace the integration placeholder with a real E2E harness
+- Add failure-injection scenarios
+- Gate releases on those checks
+- Add at least one full backup-plus-restore smoke path before asset publishing
 
-#### 2.1 — Test `internxt-service.ts` (666 LOC, ~1% coverage)
+### Phase 4: Productization improvements
 
-- Mock `child_process.exec` and `child_process.spawn`
-- Test all command builders with edge-case inputs (unicode filenames, spaces, quotes)
-- Test `shellEscape()` with adversarial inputs
-- Test JSON parsing failures from CLI output
-- Test folder-already-exists detection logic
-- Test UUID caching behavior
-- Test concurrent directory creation dedup
+Goal:
+Improve automation friendliness and operating clarity.
 
-#### 2.2 — Test `file-restore.ts` (131 LOC, 1 smoke test)
+Work:
 
-- Test full restore flow with mocked services
-- Test pattern filtering
-- Test path filtering
-- Test checksum verification pass/fail
-- Test permission restoration
-- Test error cases (CLI not installed, download failure, checksum mismatch)
+- Add JSON log output
+- Add explicit symlink handling policy
+- Consider mandatory signed-manifest mode for stricter environments
+- Improve daemon observability and notification hooks
 
-#### 2.3 — Test `scheduler.ts` (150 LOC, interface-only tests)
+## Decisions Needed
 
-- Test cron expression validation (valid/invalid)
-- Test overlap prevention behavior
-- Test graceful shutdown signal handling
-- Test immediate-run-then-schedule flow
+The next phase will move faster if these decisions are made up front:
 
-#### 2.4 — Add security-focused test cases across modules
+1. What exact failure classes deserve unique exit codes?
+2. What JSON schema should a run report follow?
+3. Must `--resume` imply true remote chunk resume, or is persisted retry state
+   acceptable for now?
+4. What environment will own real Internxt E2E coverage?
+5. Should signed manifests remain optional or become mandatory in stricter
+   profiles?
 
-- Path traversal in file-scanner, path-utils, file-restore
-- Shell injection attempts in internxt-service
-- Malformed JSON in state file loading
-- Corrupted baseline/manifest files
+## Suggested Definition Of Done For The Next Cycle
 
-#### 2.5 — Enforce coverage threshold in CI
+The next development cycle should be considered successful when:
 
-- Add minimum coverage gate (e.g. 70%) in `ci.yml`
-- Fail the build if coverage drops below threshold
-
----
-
-### Phase 3: Reliability Improvements (Medium Priority)
-
-#### 3.1 — Handle symlinks explicitly
-
-- Detect symlinks during scanning (`fs.lstatSync`)
-- Option to follow or skip (default: skip with warning)
-- Prevent circular reference infinite loops
-
-#### 3.2 — Add disk space pre-flight check
-
-- Check available space before restore operations
-- Warn if estimated download size exceeds available space
-- Use `fs.statfs()` or equivalent
-
-#### 3.3 — Handle auth token expiry during long operations
-
-- Re-check auth before each batch of uploads (not just at start)
-- Or catch 401-equivalent errors from CLI and re-prompt
-
-#### 3.4 — Add dry-run mode
-
-- `--dry-run` flag that shows what would be uploaded/deleted/downloaded without executing
-- Useful for verifying differential backup detection
-
----
-
-### Phase 4: Code Quality (Lower Priority)
-
-#### 4.1 — Replace `(instance as any).service` test pattern
-
-- Refactor factories to accept optional dependency overrides via options parameter
-- Example: `createUploader({ internxtService?: ..., hashCache?: ... })`
-- Already partially done in `file-sync.ts` with `SyncDependencies`; extend to all services
-
-#### 4.2 — Centralize path validation
-
-- Create `src/utils/path-validation.ts` with `assertSafePath()`, `normalizeSafePath()`
-- Use consistently across all path-handling code
-- Single point of security enforcement
-
-#### 4.3 — Improve error recovery in work-pool
-
-- Currently silently swallows handler errors
-- Add error callback or result collection
-- Allow callers to distinguish success/failure per item
-
-#### 4.4 — Add structured logging
-
-- Current logger uses plain strings
-- Consider structured format for machine-parseable output (useful for daemon mode)
-- Add `--json` output flag for scripting integration
-
----
-
-## Execution Priority
-
-| Step                          | Effort | Impact | Priority  |
-| ----------------------------- | ------ | ------ | --------- |
-| 1.1 Temp file security        | Small  | High   | Do first  |
-| 1.2 Path traversal protection | Small  | High   | Do first  |
-| 1.3 Instance locking          | Small  | Medium | Do first  |
-| 1.4 MD5 → SHA-256             | Medium | Medium | Do first  |
-| 2.1 Test internxt-service     | Large  | High   | Do second |
-| 2.2 Test file-restore         | Medium | High   | Do second |
-| 2.3 Test scheduler            | Small  | Medium | Do second |
-| 2.4 Security test cases       | Medium | High   | Do second |
-| 2.5 Coverage threshold        | Small  | Medium | Do second |
-| 3.1 Symlink handling          | Small  | Medium | Do third  |
-| 3.2 Disk space check          | Small  | Medium | Do third  |
-| 3.3 Auth refresh              | Medium | Medium | Do third  |
-| 3.4 Dry-run mode              | Medium | Medium | Do third  |
-| 4.1-4.4 Code quality          | Medium | Low    | Do last   |
+1. The CLI contract matches the real transfer behavior.
+2. Failures are scriptable through documented exit codes and run reports.
+3. Backup and restore are exercised in a real Internxt-backed E2E path.
+4. Destructive and long-running operations have stronger operator safeguards.

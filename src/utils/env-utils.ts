@@ -1,6 +1,6 @@
 /**
- * Environment utilities for the WebDAV Backup Tool
- * Handles system capabilities for Bun runtime
+ * Environment utilities for internxt-backup.
+ * Handles runtime-dependent concurrency defaults.
  */
 
 import os from 'os';
