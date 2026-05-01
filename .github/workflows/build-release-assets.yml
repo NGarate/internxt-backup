@@ -249,7 +249,7 @@ jobs:
           fi
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2.5.0
+        uses: softprops/action-gh-release@v3.0.0
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           files: ./release/${{ matrix.artifact }}.*
@@ -297,7 +297,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Update release notes
-        uses: softprops/action-gh-release@v2.5.0
+        uses: softprops/action-gh-release@v3.0.0
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: ${{ needs.prepare.outputs.release_version }}
