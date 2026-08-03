@@ -54,19 +54,24 @@ The orchestrator (`file-sync.ts`) checks Internxt CLI installation/auth, creates
 **Core services** (`src/core/`):
 
 - `internxt/internxt-service.ts` — wraps Internxt CLI commands (upload, mkdir, list-files) via shell exec
-- `file-scanner.ts` — scans directories, calculates MD5 checksums, detects changes against cached state
+- `file-scanner.ts` — scans directories, calculates SHA-256 checksums, detects changes against cached state
+- `backup/backup-state.ts` — baseline snapshot, differential selection, deletion detection, HMAC-signed manifest
 - `upload/uploader.ts` — upload orchestrator that coordinates the services below
-- `upload/upload-pool.ts` — concurrent upload queue with configurable max parallelism
-- `upload/hash-cache.ts` — persists file hashes to `tmpdir/internxt-backup-hash-cache.json` for change detection
-- `upload/resumable-uploader.ts` — chunked uploads for large files with resume capability
+- `upload/upload-pool.ts` — thin wrapper over `core/pool/work-pool.ts`
+- `upload/hash-cache.ts` — persists file hashes to `~/.internxt-backup/internxt-backup-hash-cache.json`
+- `upload/resumable-uploader.ts` — **whole-file retry with persisted state, NOT chunk resume.** `uploadedChunks` is never populated; each attempt re-uploads the entire file. The Internxt CLI exposes no chunk API.
 - `upload/progress-tracker.ts` — tracks and displays upload progress
+- `download/downloader.ts` — parallel restore downloads with checksum verification
 - `scheduler/scheduler.ts` — cron scheduling via croner, prevents overlapping executions
+- `pool/work-pool.ts` — generic concurrency pool, returns per-item results and never rejects
+
+**Runtime** (`src/runtime/`): `run-failure.ts` — `RunFailureCode` taxonomy and stable exit codes. Throw `RunFailure` rather than bare `Error` so failures map to a documented exit code.
 
 **Interfaces** (`src/interfaces/`): `FileInfo`, `ScanResult`, `FileScannerInterface`, Internxt CLI result types, `Verbosity` enum (Quiet/Normal/Verbose).
 
-**Utilities** (`src/utils/`): logger with verbosity levels, filesystem helpers (checksums, file ops), CPU core detection for concurrency defaults.
+**Utilities** (`src/utils/`): logger with verbosity levels (errors go to **stderr**, everything else stdout), filesystem helpers (checksums, file ops), CPU core detection, PID locking, state-dir hardening.
 
-Services are instantiated inside constructors. Tests replace private service instances directly: `(instance as any).service = mockService`. No DI container.
+Services are factory functions (`createX(...)`) taking an optional dependencies object. Tests inject fakes through that parameter — there is no DI container and no private-property patching.
 
 ## Code Conventions
 
@@ -123,17 +128,18 @@ Mock factories are available in `test-config/mocks/test-helpers.ts` (imported vi
 - `createMockFs()` — readFileSync, writeFileSync, existsSync, promises.\*
 - `mockProcessOutput()` — capture stdout/stderr in tests (call `.restore()` in afterEach)
 
-The `spyOn` wrapper from test-helpers gracefully handles Bun's accessor property limitation.
+The `spyOn` wrapper from test-helpers gracefully handles Bun's accessor property limitation. Note it silently returns a no-op mock when spying fails, so a passing assertion on a spy is not by itself proof the spy attached.
 
-`skipIfSpyingIssues(name, fn)` — for tests that may fail due to Bun spyOn limits.
+`skipIfSpyingIssues(name, fn)` — for tests that may fail due to Bun spyOn limits. Currently unused.
 
-Private service injection pattern: `(instance as any).serviceName = mockService`
+Inject fakes through the factory's dependencies parameter, e.g.
+`createUploader(concurrency, target, verbosity, { internxtService: mockService })`.
 
 ## How to Add a New Service
 
-1. Create `src/core/<domain>/<service-name>.ts`
+1. Create `src/core/<domain>/<service-name>.ts` exporting a `createX(...)` factory
 2. Add interface to `src/interfaces/` if it needs to be mocked
 3. Create `src/core/<domain>/<service-name>.test.ts` colocated
 4. Add `createMock<ServiceName>()` factory to `test-config/mocks/test-helpers.ts` and export from default
-5. Instantiate in the consumer class constructor
+5. Accept it via the consumer factory's dependencies parameter
 6. Run `bun run check` to verify
