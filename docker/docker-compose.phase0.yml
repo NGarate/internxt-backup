@@ -1,0 +1,65 @@
+# Phase 0 / 0.5 — transport proof.
+#
+# Brings up the real runtime image on the NAS with the real volume layout, but
+# with no supervisor and no schedule. You exec into it and run the T0-T9
+# scripts by hand. The point is that Phase 0's numbers come from the target
+# hardware: CPU flags, TOS Docker networking/DNS/MTU and disk all differ from a
+# laptop, and a throughput figure measured anywhere else is not evidence.
+#
+#   docker compose -f docker/docker-compose.phase0.yml up -d
+#   docker compose -f docker/docker-compose.phase0.yml exec phase0 sh
+#
+# Build the transport-only image (no Bun binary needed yet):
+#   docker build -f docker/Dockerfile --build-arg SUPERVISOR=false \
+#     -t internxt-backup:transport .
+
+services:
+  phase0:
+    image: internxt-backup:transport
+    container_name: internxt-backup-phase0
+    # NOT unless-stopped: it is reported not to survive reboot on TOS.
+    # Confirm on your own TOS build while you are here — it is a one-line
+    # check now and a silent dead backup later.
+    restart: always
+    user: '1000:1000'
+    command: ['sleep', 'infinity']
+
+    environment:
+      TZ: Europe/Madrid
+      # Secrets are NOT set here. A compose file is not a secret store: it gets
+      # copied, backed up, rendered in Docker Manager's UI, and surfaced by
+      # `docker inspect`. Export them into your shell and pass them per-exec:
+      #   docker compose ... exec -e RESTIC_PASSWORD="$KEY" phase0 sh
+      # See docs/security.md.
+      RCLONE_CONFIG: /dev/null
+      RCLONE_CONFIG_INTERNXT_TYPE: internxt
+
+    volumes:
+      # Everything persistent lives under a user-created share. Only /Volume1
+      # survives a TOS firmware update, and @-prefixed paths such as
+      # /Volume1/@DockerData are TOS-managed with no stable layout contract.
+      - /Volume1/appdata/internxt-backup/state:/state
+      - /Volume1/appdata/internxt-backup/cache:/cache
+      - /Volume1/appdata/internxt-backup/phase0-out:/out
+
+      # Sources are read-only, always. A backup tool should be structurally
+      # incapable of writing to what it backs up. Point this at a
+      # representative 20-50 GB slice of real data for T2 — synthetic data
+      # measures the link but tells you nothing about your compression ratio.
+      - /Volume1/Photos:/data/sample:ro
+
+      # Scratch target for the T5 restore + byte-exact diff.
+      - /Volume1/appdata/internxt-backup/phase0-restore:/restore
+
+    # restic holds its index in memory; ~1-3 GB during backup at this repo
+    # size, more during prune. memswap_limit equal to mem_limit disables swap:
+    # an OOM kill is preferable to hours of thrashing on a 5 MB/s job.
+    mem_limit: 6g
+    memswap_limit: 6g
+    cpus: 3.0
+
+    logging:
+      driver: json-file
+      options:
+        max-size: '20m'
+        max-file: '5'
