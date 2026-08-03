@@ -59,8 +59,9 @@ export function log(
   }
 }
 
+// Errors go to stderr so stdout stays a clean, machine-readable channel.
 export function error(message: string): void {
-  process.stdout.write(red(`❌ ${message}`) + '\n');
+  process.stderr.write(red(`❌ ${message}`) + '\n');
 }
 
 export function warning(message: string, currentVerbosity: number): void {

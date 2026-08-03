@@ -98,13 +98,19 @@ describe('Logger Utilities', () => {
   });
 
   describe('error', () => {
-    it('should log error message to stdout', () => {
+    it('should log error message to stderr', () => {
       logger.error('Error message');
 
-      expect(stdoutOutput.length).toBeGreaterThan(0);
+      expect(stderrOutput.length).toBeGreaterThan(0);
       expect(
-        stdoutOutput.some((output) => output.includes('Error message')),
+        stderrOutput.some((output) => output.includes('Error message')),
       ).toBe(true);
+    });
+
+    it('should not write errors to stdout', () => {
+      logger.error('Error message');
+
+      expect(stdoutOutput.length).toBe(0);
     });
   });
 
