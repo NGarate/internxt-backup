@@ -1,0 +1,232 @@
+diff --git a/backend/internxt/auth.go b/backend/internxt/auth.go
+index 63bdb5246e..fc77f42fe3 100644
+--- a/backend/internxt/auth.go
++++ b/backend/internxt/auth.go
+@@ -14,6 +14,7 @@ import (
+ 	internxtauth "github.com/internxt/rclone-adapter/auth"
+ 	internxtconfig "github.com/internxt/rclone-adapter/config"
+ 	sdkerrors "github.com/internxt/rclone-adapter/errors"
++	"github.com/pquerna/otp/totp"
+ 	"github.com/rclone/rclone/fs"
+ 	"github.com/rclone/rclone/fs/config/configmap"
+ 	"github.com/rclone/rclone/fs/config/obscure"
+@@ -156,6 +157,14 @@ func (f *Fs) reLogin(ctx context.Context) (*internxtauth.AccessResponse, error)
+ 		return nil, fmt.Errorf("couldn't decrypt password: %w", err)
+ 	}
+ 
++	twoFASecret := ""
++	if f.opt.OtpSecretKey != "" {
++		twoFASecret, err = obscure.Reveal(f.opt.OtpSecretKey)
++		if err != nil {
++			return nil, fmt.Errorf("invalid OTP secret key: %w", err)
++		}
++	}
++
+ 	cfg := internxtconfig.NewDefaultToken("")
+ 	cfg.HTTPClient = fshttp.NewClient(ctx)
+ 
+@@ -164,11 +173,17 @@ func (f *Fs) reLogin(ctx context.Context) (*internxtauth.AccessResponse, error)
+ 		return nil, fmt.Errorf("re-login check failed: %w", err)
+ 	}
+ 
+-	if loginResp.TFA {
++	if loginResp.TFA && twoFASecret == "" {
+ 		return nil, errors.New("account requires 2FA - please run: rclone config reconnect " + f.name + ":")
+ 	}
+ 
+-	resp, err := internxtauth.DoLogin(ctx, cfg, f.opt.Email, password, "")
++	otpCode := ""
++	if loginResp.TFA && twoFASecret != "" {
++		tfa, _ := totp.GenerateCode(twoFASecret, time.Now())
++		otpCode = tfa
++	}
++
++	resp, err := internxtauth.DoLogin(ctx, cfg, f.opt.Email, password, otpCode)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("re-login failed: %w", err)
+ 	}
+@@ -238,9 +253,29 @@ func (f *Fs) reAuthorize(ctx context.Context) error {
+ 
+ 	err := f.refreshOrReLogin(ctx)
+ 	if err != nil {
+-		f.authFailed = true
++		// Only latch the circuit breaker on genuine, non-recoverable auth
++		// failures. Transient errors (network blips, timeouts, 429, 5xx,
++		// context cancellation) must not permanently disable the remote -
++		// otherwise a single hiccup forces the user to reconfigure even
++		// though the credentials and 2FA secret are still valid.
++		if !isTemporaryErr(err) {
++			f.authFailed = true
++		}
+ 		return err
+ 	}
+ 
+ 	return nil
+ }
++
++// isTemporaryErr reports whether err is a transient failure that may
++// succeed if retried, as opposed to a genuine authentication failure.
++func isTemporaryErr(err error) bool {
++	if fserrors.ShouldRetry(err) {
++		return true
++	}
++	var httpErr *sdkerrors.HTTPError
++	if errors.As(err, &httpErr) {
++		return httpErr.Temporary()
++	}
++	return false
++}
+diff --git a/backend/internxt/internxt.go b/backend/internxt/internxt.go
+index 58c9f1e21e..50e7c9f1eb 100644
+--- a/backend/internxt/internxt.go
++++ b/backend/internxt/internxt.go
+@@ -20,6 +20,7 @@ import (
+ 	"github.com/internxt/rclone-adapter/files"
+ 	"github.com/internxt/rclone-adapter/folders"
+ 	"github.com/internxt/rclone-adapter/users"
++	"github.com/pquerna/otp/totp"
+ 	"github.com/rclone/rclone/fs"
+ 	rclone_config "github.com/rclone/rclone/fs/config"
+ 	"github.com/rclone/rclone/fs/config/configmap"
+@@ -95,6 +96,30 @@ func init() {
+ 			Help:       "Password.",
+ 			Required:   true,
+ 			IsPassword: true,
++		}, {
++			Name: "2fa_code",
++			Help: `The 2FA code.
++
++The value can also be provided with --internxt-2fa-code=000000
++
++The 2FA code of your Internxt account if the account is set up with
++two-factor authentication.`,
++			Required:  false,
++			Advanced:  true,
++			Sensitive: true,
++		}, {
++			Name: "otp_secret_key",
++			Help: `The OTP secret key.
++
++The value can also be provided with --internxt-otp-secret-key=ABCDEFGHIJKLMNOPQRSTUVWXYZ234567
++
++The OTP secret key (TOTP seed, also known as the authenticator key) of your
++Internxt account if the account is set up with two-factor authentication.
++When set, rclone automatically generates 2FA codes as needed.`,
++			Required:   false,
++			Advanced:   true,
++			Sensitive:  true,
++			IsPassword: true,
+ 		}, {
+ 			Name:      "mnemonic",
+ 			Help:      "Mnemonic (internal use only)",
+@@ -164,12 +189,20 @@ func Config(ctx context.Context, name string, m configmap.Mapper, configIn fs.Co
+ 		}
+ 
+ 		if loginResp.TFA {
+-			return fs.ConfigInput("2fa", "config_2fa", "Two-factor authentication code")
++			return fs.ConfigInputOptional("otp_secret_key", "config_otp_secret_key", "OTP secret key (TOTP seed, also known as the authenticator key).\n\nCaution: this is the secret key used to generate your 2FA codes.")
+ 		}
+ 
+ 		// No 2FA required, do login directly
+ 		return fs.ConfigGoto("login")
+ 
++	case "otp_secret_key":
++		otpSecretKey := configIn.Result
++		if otpSecretKey == "" {
++			return fs.ConfigInput("2fa", "config_2fa", "Two-factor authentication code")
++		}
++		m.Set("otp_secret_key", obscure.MustObscure(otpSecretKey))
++		return fs.ConfigGoto("login")
++
+ 	case "2fa":
+ 		twoFA := configIn.Result
+ 		if twoFA == "" {
+@@ -179,8 +212,23 @@ func Config(ctx context.Context, name string, m configmap.Mapper, configIn fs.Co
+ 		return fs.ConfigGoto("login")
+ 
+ 	case "login":
++		// Both values are optional: depending on the chosen flow only one of
++		// them (or neither, for accounts without 2FA) will be set.
+ 		twoFA, _ := m.Get("2fa_code")
+ 
++		if obscuredSecret, _ := m.Get("otp_secret_key"); obscuredSecret != "" {
++			otpSecretKey, err2FaReveal := obscure.Reveal(obscuredSecret)
++			if err2FaReveal != nil {
++				return nil, fmt.Errorf("invalid OTP secret key: %w", err2FaReveal)
++			}
++
++			var err2FaGenerate error
++			twoFA, err2FaGenerate = totp.GenerateCode(otpSecretKey, time.Now())
++			if err2FaGenerate != nil {
++				return nil, fmt.Errorf("failed to generate 2FA code: %w", err2FaGenerate)
++			}
++		}
++
+ 		loginResp, err := auth.DoLogin(ctx, cfg, email, pass, twoFA)
+ 		if err != nil {
+ 			return nil, fmt.Errorf("login failed: %w", err)
+@@ -212,7 +260,8 @@ func Config(ctx context.Context, name string, m configmap.Mapper, configIn fs.Co
+ type Options struct {
+ 	Email              string               `config:"email"`
+ 	Pass               string               `config:"pass"`
+-	TwoFA              string               `config:"2fa"`
++	TwoFA              string               `config:"2fa_code"`
++	OtpSecretKey       string               `config:"otp_secret_key"` // The TOTP seed/secret
+ 	Mnemonic           string               `config:"mnemonic"`
+ 	SkipHashValidation bool                 `config:"skip_hash_validation"`
+ 	UploadCutoff       fs.SizeSuffix        `config:"upload_cutoff"`
+diff --git a/docs/content/internxt.md b/docs/content/internxt.md
+index 84d3da17e4..07a5207266 100644
+--- a/docs/content/internxt.md
++++ b/docs/content/internxt.md
+@@ -62,7 +62,7 @@ d) Delete this remote
+ y/e/d> y
+ ```
+ 
+-If you have two-factor authentication enabled on your Internxt account, you will be prompted to enter the code during login.
++If you have two-factor authentication enabled on your Internxt account, you will be prompted to enter the secret (for automatic code generation) during login. If not provided, you will be prompted to enter the code for a one time login.
+ 
+ ### Security Considerations
+ 
+@@ -137,6 +137,41 @@ Properties:
+ 
+ Here are the Advanced options specific to internxt (Internxt Drive).
+ 
++#### --internxt-2fa-code
++
++The 2FA code.
++
++The value can also be provided with --internxt-2fa-code=000000
++
++The 2FA code of your Internxt account if the account is set up with
++two-factor authentication.
++
++Properties:
++
++- Config:      2fa_code
++- Env Var:     RCLONE_INTERNXT_2FA_CODE
++- Type:        string
++- Required:    false
++
++#### --internxt-otp-secret-key
++
++The OTP secret key.
++
++The value can also be provided with --internxt-otp-secret-key=ABCDEFGHIJKLMNOPQRSTUVWXYZ234567
++
++The OTP secret key (TOTP seed, also known as the authenticator key) of your
++Internxt account if the account is set up with two-factor authentication.
++When set, rclone automatically generates 2FA codes as needed.
++
++**NB** Input to this must be obscured - see [rclone obscure](/commands/rclone_obscure/).
++
++Properties:
++
++- Config:      otp_secret_key
++- Env Var:     RCLONE_INTERNXT_OTP_SECRET_KEY
++- Type:        string
++- Required:    false
++
+ #### --internxt-mnemonic
+ 
+ Mnemonic (internal use only)

@@ -91,6 +91,7 @@ EMAIL=$(read_key email)
 PASS=$(read_key pass)
 MNEMONIC=$(read_key mnemonic)
 TOKEN=$(read_key token)
+OTP_SECRET=$(read_key otp_secret_key)
 
 for pair in "email:$EMAIL" "pass:$PASS" "mnemonic:$MNEMONIC" "token:$TOKEN"; do
   if [ -z "${pair#*:}" ]; then
@@ -98,6 +99,44 @@ for pair in "email:$EMAIL" "pass:$PASS" "mnemonic:$MNEMONIC" "token:$TOKEN"; do
     exit 1
   fi
 done
+
+# The seed is what makes re-authentication survive token expiry without a
+# human. Offer it here rather than leaving the operator to discover the option,
+# because the alternative failure happens days later, mid-seed.
+if [ -z "$OTP_SECRET" ] && rclone help backend internxt 2>/dev/null | grep -q 'otp-secret-key'; then
+  cat >&2 <<'EOF'
+
+  No TOTP seed is configured.
+
+  Without it the session works until the token expires, and then stops until
+  someone runs this again with an authenticator to hand. With it, rclone
+  generates its own codes and re-authenticates unattended.
+
+  The seed is the base32 string behind the QR code you scanned when enabling
+  2FA (e.g. JBSWY3DPEHPK3PXP). If you did not save it, you can get a fresh one
+  by disabling and re-enabling 2FA in Internxt's security settings.
+
+  Trade-off, stated plainly: anything holding the seed can mint valid codes,
+  so storing it here reduces 2FA to a second stored secret for automated
+  access. It still protects interactive and web login. See docs/security.md.
+
+EOF
+  printf '  Paste the TOTP seed (or press Enter to skip): ' >&2
+  read -rs SEED_INPUT </dev/tty || SEED_INPUT=""
+  echo >&2
+  if [ -n "$SEED_INPUT" ]; then
+    # rclone stores this obscured, same as the password.
+    OTP_SECRET=$(printf '%s' "$SEED_INPUT" | rclone obscure -)
+    unset SEED_INPUT
+    rclone config update "$REMOTE" otp_secret_key "$OTP_SECRET" --non-interactive >/dev/null 2>&1 || true
+    if rclone about "${REMOTE}:" >/dev/null 2>&1; then
+      echo "  OK: seed accepted and the remote still authenticates" >&2
+    else
+      echo "bootstrap: the remote stopped working after setting the seed; check that it is correct" >&2
+      exit 1
+    fi
+  fi
+fi
 
 cat >&2 <<'EOF'
 
@@ -120,6 +159,16 @@ export ${ENV_PREFIX}_PASS='${PASS}'
 export ${ENV_PREFIX}_MNEMONIC='${MNEMONIC}'
 export ${ENV_PREFIX}_TOKEN='${TOKEN}'
 EOF
+if [ -n "$OTP_SECRET" ]; then
+  echo "export ${ENV_PREFIX}_OTP_SECRET_KEY='${OTP_SECRET}'"
+else
+  cat >&2 <<'EOF'
+
+  ⚠  No TOTP seed in this block. Backups will stop when the session token
+     expires and will need this script re-run by hand. Acceptable for a short
+     test; not for a multi-day seed.
+EOF
+fi
 
 cat >&2 <<EOF
 

@@ -81,12 +81,26 @@ require_secrets() {
   if [ -z "${RCLONE_CONFIG_INTERNXT_TYPE:-}" ]; then
     die "RCLONE_CONFIG_INTERNXT_TYPE is unset; define the remote from the environment (see docs/security.md)"
   fi
-  # The backend cannot log in unattended: it needs a mnemonic and a token that
-  # only an interactive `rclone config` produces, because that is where the 2FA
-  # code is entered. Catch this here rather than three hours into T2.
-  if [ -z "${RCLONE_CONFIG_INTERNXT_MNEMONIC:-}" ] || [ -z "${RCLONE_CONFIG_INTERNXT_TOKEN:-}" ]; then
-    die "RCLONE_CONFIG_INTERNXT_MNEMONIC and _TOKEN are required; run /phase0/bootstrap-auth.sh once to obtain them"
+  # Two viable auth shapes, and neither is email+password alone:
+  #
+  #  (a) OTP_SECRET_KEY set — the TOTP seed. rclone generates codes itself and
+  #      can log in from scratch, so re-authentication survives token expiry
+  #      unattended. Requires the patched rclone (RCLONE_VARIANT=totp).
+  #  (b) MNEMONIC + TOKEN set — captured from a one-time interactive login.
+  #      Works until the token expires, then needs a human with an authenticator.
+  #
+  # Catch a missing one here rather than three hours into T2.
+  if [ -z "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
+    if [ -z "${RCLONE_CONFIG_INTERNXT_MNEMONIC:-}" ] || [ -z "${RCLONE_CONFIG_INTERNXT_TOKEN:-}" ]; then
+      die "set RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY (preferred, survives token expiry), or MNEMONIC and _TOKEN together; run /phase0/bootstrap-auth.sh"
+    fi
+    warn "no OTP secret configured: this session cannot re-authenticate unattended and will stop when the token expires"
   fi
+}
+
+# Does this rclone understand the TOTP seed option?
+has_totp_support() {
+  rclone help backend internxt 2>/dev/null | grep -q 'otp-secret-key'
 }
 
 # rclone reports an expired or rejected session as a request to reconnect.

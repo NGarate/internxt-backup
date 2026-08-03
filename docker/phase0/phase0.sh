@@ -43,6 +43,22 @@ t0() {
   fi
   record T0 PASS "rclone exposes the internxt backend"
 
+  # An account with 2FA cannot re-authenticate headlessly on the stock build.
+  # Report which situation this run is actually in, so a later expiry is
+  # explicable rather than mysterious.
+  if has_totp_support; then
+    if [ -n "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
+      record T0 PASS "TOTP seed configured — re-authentication is unattended"
+    else
+      record T0 WARN "rclone supports otp_secret_key but none is set; expiry will still need a human"
+    fi
+  elif [ -n "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
+    record T0 FAIL "OTP secret set but this rclone ignores it — rebuild with --build-arg RCLONE_VARIANT=totp"
+    return 1
+  else
+    record T0 WARN "stock rclone: no unattended re-auth. Fine for a short run, not for a multi-day seed on a 2FA account"
+  fi
+
   # About() is implemented by this backend, which is what makes T6 measurable.
   # Capture it before anything else touches the account.
   quota_snapshot t0

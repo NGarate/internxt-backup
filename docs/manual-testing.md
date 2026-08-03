@@ -174,7 +174,48 @@ export RCLONE_CONFIG_INTERNXT_TOKEN='...'
 paid tiers in 2025 and de-entitled some lifetime accounts. If `rclone about`
 fails with an authorisation error, nothing downstream matters.
 
-### C4. The open question: how long does the token last?
+### C3b. The TOTP seed — required for unattended operation
+
+Everything above works until the session token expires, at which point rclone
+re-authenticates from email + password and needs a fresh 2FA code. There is no
+headless way to supply one on the stock build, so backups stop until a human
+runs the bootstrap again.
+
+[rclone#9529](https://github.com/rclone/rclone/pull/9529) adds `otp_secret_key`:
+give rclone the TOTP **seed** and it generates codes itself. Build with it:
+
+```bash
+docker build -f docker/Dockerfile --target phase0 \
+  --build-arg RCLONE_VARIANT=totp \
+  -t internxt-backup:phase0 .
+```
+
+This compiles rclone **v1.75.0 plus two backend files** — the patch is
+vendored in `docker/patches/` and verified to apply cleanly to the release tag,
+so it is not an unreleased master snapshot. `github.com/pquerna/otp` is already
+a direct dependency of v1.75.0, so `go.mod` is untouched. The build fails if
+`otp-secret-key` is absent from the resulting binary, because a patch that
+silently did nothing would only surface days later mid-seed.
+
+`bootstrap-auth.sh` then offers to store the seed and re-verifies the remote
+before emitting it. The seed is the base32 string behind the QR code you
+scanned when enabling 2FA (e.g. `JBSWY3DPEHPK3PXP`). **If you did not save it**,
+get a fresh one by disabling and re-enabling 2FA in Internxt's security
+settings.
+
+> **The trade-off, stated plainly.** Anything holding the seed can mint valid
+> codes, so storing it reduces 2FA to a second stored secret _for automated
+> access_. rclone's maintainer made exactly this objection on 2026-07-10, and
+> it is correct. What you keep: 2FA still protects interactive and web login,
+> and the seed lives only in environment variables — never on disk, never in
+> the compose file. What you accept: an attacker with your environment can
+> authenticate as you. Weigh it against the alternative, which is disabling 2FA
+> outright — strictly worse, since that drops it for interactive login too.
+
+Because it is an unmerged PR, pin the image and do not rebuild casually. If
+#9529 lands upstream, drop the patch and go back to `RCLONE_VARIANT=release`.
+
+### C4. Measuring the token lifetime anyway
 
 When the token expires the backend re-authenticates from email + password —
 which with 2FA enabled needs a TOTP code and has **no unattended path**.

@@ -10,12 +10,13 @@
 #   docker compose -f docker/docker-compose.phase0.yml exec phase0 sh
 #
 # Build the transport-only image (no Bun binary needed yet):
-#   docker build -f docker/Dockerfile --build-arg SUPERVISOR=false \
-#     -t internxt-backup:transport .
+#   docker build -f docker/Dockerfile --target phase0 \
+#     --build-arg RCLONE_VARIANT=totp \
+#     -t internxt-backup:phase0 .
 
 services:
   phase0:
-    image: internxt-backup:transport
+    image: internxt-backup:phase0
     container_name: internxt-backup-phase0
     # NOT unless-stopped: it is reported not to survive reboot on TOS.
     # Confirm on your own TOS build while you are here — it is a one-line

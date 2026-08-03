@@ -115,6 +115,23 @@ echo "require_secrets guard:"
 ( export RESTIC_PASSWORD=x; unset RCLONE_CONFIG_INTERNXT_TYPE
   require_secrets ) >/dev/null 2>&1; rc_is "rejects an undefined remote" 1 $?
 
+# Two viable auth shapes; email+password alone is never one of them.
+( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
+         RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY=seed
+  unset RCLONE_CONFIG_INTERNXT_MNEMONIC RCLONE_CONFIG_INTERNXT_TOKEN
+  require_secrets ) >/dev/null 2>&1; rc_is "accepts a TOTP seed alone" 0 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
+         RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
+  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY
+  require_secrets ) >/dev/null 2>&1; rc_is "accepts mnemonic+token together" 0 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt
+  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY RCLONE_CONFIG_INTERNXT_MNEMONIC RCLONE_CONFIG_INTERNXT_TOKEN
+  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS email+password alone" 1 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
+         RCLONE_CONFIG_INTERNXT_MNEMONIC=m
+  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY RCLONE_CONFIG_INTERNXT_TOKEN
+  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS a half-configured mnemonic/token pair" 1 $?
+
 echo
 echo "record + report:"
 : > "$VERDICTS"
