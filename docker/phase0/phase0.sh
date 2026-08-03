@@ -47,9 +47,18 @@ t0() {
   # Capture it before anything else touches the account.
   quota_snapshot t0
   if [ -z "$(quota_used t0)" ]; then
-    record T0 FAIL "rclone about failed — check credentials and account entitlement"
+    if is_auth_expired "${OUT}/quota-t0.err"; then
+      record T0 FAIL "session token rejected — re-run /phase0/bootstrap-auth.sh (2FA cannot be satisfied unattended)"
+    else
+      record T0 FAIL "rclone about failed — check credentials and account entitlement"
+    fi
     return 1
   fi
+
+  # Note when the session started working, so a later expiry can be turned
+  # into a measured lifetime rather than a guess.
+  date -u +%Y-%m-%dT%H:%M:%SZ > "${OUT}/auth-verified-at.txt"
+  record T0 INFO "session verified at $(cat "${OUT}/auth-verified-at.txt"); if a later test reports expiry, the delta is the usable token lifetime"
   record T0 PASS "quota readable" "$(jq -c '{total,used,free}' "${OUT}/quota-t0.json")"
 
   if rclone lsd "${PHASE0_REMOTE}:" >"${OUT}/t0-lsd.txt" 2>&1; then
@@ -439,6 +448,10 @@ t9() {
 report() {
   step "Phase 0 report"
   [ -s "$VERDICTS" ] || die "no verdicts recorded; run the tests first"
+
+  # A session that died mid-run makes every later verdict meaningless, so
+  # surface it before the table rather than leaving it buried in a .err file.
+  check_auth_expiry || true
 
   local pass fail warns
   pass=$(jq -r 'select(.verdict=="PASS")' "$VERDICTS" | jq -s length)

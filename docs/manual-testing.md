@@ -100,6 +100,8 @@ security measure. Read from stdin so the password never enters shell history
 or `ps`:
 
 ```bash
+# (C1 is only needed if you want to check the obscure round-trip; bootstrap-auth.sh
+# does the obscuring for you.)
 read -rs INXT_PASS
 printf '%s' "$INXT_PASS" | docker run --rm -i --entrypoint rclone internxt-backup:phase0 obscure -
 ```
@@ -126,29 +128,77 @@ export INXT_OBSCURED="<the string from C1>"
 > moment it exists. Put it in your Bitwarden Families vault **and** on a
 > printed card before running C3.
 
-### C3. Prove the account authenticates
+### C3. Bootstrap authentication (required — 2FA cannot be done unattended)
 
-```bash
-docker run --rm \
-  -e RCLONE_CONFIG_INTERNXT_TYPE=internxt \
-  -e RCLONE_CONFIG_INTERNXT_EMAIL="$INXT_EMAIL" \
-  -e RCLONE_CONFIG_INTERNXT_PASS="$INXT_OBSCURED" \
-  --entrypoint rclone internxt-backup:phase0 about internxt: --json
+**Email and password alone are not enough.** Probing the backend directly
+shows it requires a `mnemonic` **and** a `token` already present in config, and
+never performs a fresh login at runtime:
+
+```
+email + pass only   →  "mnemonic is required - please run: rclone config reconnect"
+        + mnemonic  →  "failed to get token ... empty token found"
 ```
 
-Expected something like `{"total":10995116277760,"used":0,"free":10995116277760}`.
+Both are produced by an interactive `rclone config`, which is where the 2FA
+code is entered. Neither is a documented option, but both are readable from
+the environment — which is what makes an otherwise-interactive backend usable
+with no config file on disk.
 
-**This is the real entitlement gate.** Internxt paywalled CLI/WebDAV/rclone to
-paid tiers in 2025 and de-entitled some lifetime accounts. If this fails with
-an authorisation error, nothing downstream matters — stop and resolve it first.
+Authenticate once, with a TTY:
 
-The mnemonic is not needed here: rclone derives it at login.
-`RCLONE_CONFIG_INTERNXT_MNEMONIC` exists but is marked internal-use.
+```bash
+docker compose -f docker/docker-compose.phase0.yml exec -it phase0 \
+  /phase0/bootstrap-auth.sh
+```
 
-> If your account has 2FA enabled this step may fail. rclone prompts for the
-> code interactively at config time, and unattended TOTP support
-> ([rclone#9529](https://github.com/rclone/rclone/pull/9529)) is still an open
-> PR. If you hit this, that is a decision point, not a bug in this repo.
+Answer `n` → name `internxt` → storage `internxt` → email, password, 2FA code
+→ accept defaults. It verifies with `rclone about` before emitting anything,
+then prints an export block. Nothing touches persistent storage: the temporary
+config lives in `/dev/shm` and is overwritten and deleted on exit.
+
+```bash
+export RCLONE_CONFIG_INTERNXT_TYPE=internxt
+export RCLONE_CONFIG_INTERNXT_EMAIL='...'
+export RCLONE_CONFIG_INTERNXT_PASS='...'
+export RCLONE_CONFIG_INTERNXT_MNEMONIC='...'
+export RCLONE_CONFIG_INTERNXT_TOKEN='...'
+```
+
+> 🔴 That block contains your password, your **end-to-end encryption
+> mnemonic**, and a session token. Treat it exactly as you would the restic
+> passphrase. Never put it in a compose file, a `.env`, or a shell that records
+> history. And **escrow the mnemonic**: Internxt is zero-knowledge, so losing
+> the password _and_ mnemonic loses the account independently of restic.
+
+**This is also the entitlement gate.** Internxt paywalled CLI/WebDAV/rclone to
+paid tiers in 2025 and de-entitled some lifetime accounts. If `rclone about`
+fails with an authorisation error, nothing downstream matters.
+
+### C4. The open question: how long does the token last?
+
+When the token expires the backend re-authenticates from email + password —
+which with 2FA enabled needs a TOTP code and has **no unattended path**.
+Unattended TOTP support ([rclone#9529](https://github.com/rclone/rclone/pull/9529))
+is still an open PR; the maintainer objected on 10 Jul 2026 that storing a TOTP
+seed "materially weakens 2FA".
+
+Nobody has published the token lifetime, so Phase 0 measures it. `t0` stamps
+`auth-verified-at.txt`, and every later test scans its stderr for rclone's
+reconnect request. If the session dies mid-run you get an explicit `AUTH FAIL`
+verdict naming the test, and the delta is the usable lifetime.
+
+**If the token survives Phase 0 (~a day), nightly incrementals are viable and
+you re-bootstrap occasionally.** If it dies inside a few hours, a ~10-day seed
+is not viable as-is, and the options are:
+
+|                                | Trade-off                                                                                                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Build rclone with PR #9529** | Adds `otp_secret_key` for auto-generated codes, and fixes a re-auth bug where transient failures permanently disabled the remote. Unmerged, so pin a commit. Storing the seed weakens 2FA for automation while keeping it for interactive login. |
+| **Disable 2FA on the account** | Simplest. Weaker than the above, not stronger: you are already placing the password and mnemonic on the NAS, and this additionally removes 2FA from _interactive_ login.                                                                         |
+| **Split the seed**             | Re-bootstrap between seed units. Works because seed units are independent and restic resumes, but needs a human every few hours.                                                                                                                 |
+| **Switch provider**            | B2 application keys and Storj access grants are designed for machines and never expire this way. Exactly what keeping `[repo] backend` pluggable was for.                                                                                        |
+
+Nothing here is decided by this repo — it is a real constraint of the provider.
 
 ---
 

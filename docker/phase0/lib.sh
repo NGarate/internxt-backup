@@ -81,6 +81,33 @@ require_secrets() {
   if [ -z "${RCLONE_CONFIG_INTERNXT_TYPE:-}" ]; then
     die "RCLONE_CONFIG_INTERNXT_TYPE is unset; define the remote from the environment (see docs/security.md)"
   fi
+  # The backend cannot log in unattended: it needs a mnemonic and a token that
+  # only an interactive `rclone config` produces, because that is where the 2FA
+  # code is entered. Catch this here rather than three hours into T2.
+  if [ -z "${RCLONE_CONFIG_INTERNXT_MNEMONIC:-}" ] || [ -z "${RCLONE_CONFIG_INTERNXT_TOKEN:-}" ]; then
+    die "RCLONE_CONFIG_INTERNXT_MNEMONIC and _TOKEN are required; run /phase0/bootstrap-auth.sh once to obtain them"
+  fi
+}
+
+# rclone reports an expired or rejected session as a request to reconnect.
+# With 2FA enabled there is no unattended way to satisfy that, so it is worth
+# distinguishing from an ordinary transport failure — it is a different
+# problem with a different fix.
+is_auth_expired() { # is_auth_expired <file>
+  [ -f "$1" ] || return 1
+  grep -qiE 'config reconnect|empty token found|failed to get token|mnemonic is required' "$1"
+}
+
+# Scan every captured stderr for auth expiry and record it once.
+check_auth_expiry() {
+  local hit=""
+  for f in "$OUT"/*.err; do
+    [ -f "$f" ] || continue
+    if is_auth_expired "$f"; then hit="$(basename "$f")"; break; fi
+  done
+  [ -n "$hit" ] || return 0
+  record AUTH FAIL "session expired mid-run (first seen in ${hit}); with 2FA enabled rclone cannot re-authenticate unattended — see docs/manual-testing.md"
+  return 1
 }
 
 require_disposable() {

@@ -91,13 +91,26 @@ echo "require_disposable guard:"
 ( PHASE0_REPO_PATH="backups/production" require_disposable ) >/dev/null 2>&1; rc_is "REJECTS production"        1 $?
 
 echo
+echo "is_auth_expired (real rclone strings, captured from the backend):"
+mk() { printf '%s\n' "$2" > "$TMP/$1.err"; echo "$TMP/$1.err"; }
+f=$(mk mnem 'CRITICAL: Failed to create file system for "ix:": mnemonic is required - please run: rclone config reconnect ix{qgkgi}:')
+is_auth_expired "$f"; rc_is "detects a missing mnemonic" 0 $?
+f=$(mk tok 'CRITICAL: failed to get token - please run: rclone config reconnect ix{ntyxP}: - empty token found')
+is_auth_expired "$f"; rc_is "detects an empty token" 0 $?
+f=$(mk recon 'Failed: please run "rclone config reconnect internxt:"')
+is_auth_expired "$f"; rc_is "detects a reconnect request" 0 $?
+f=$(mk plain 'connection reset by peer')
+is_auth_expired "$f"; rc_is "does NOT flag an ordinary transport error" 1 $?
+is_auth_expired "$TMP/does-not-exist.err"; rc_is "missing file is not auth expiry" 1 $?
+
+echo
 echo "require_secrets guard:"
 ( unset RESTIC_PASSWORD RESTIC_PASSWORD_COMMAND
-  export RCLONE_CONFIG_INTERNXT_TYPE=internxt
+  export RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
   require_secrets ) >/dev/null 2>&1; rc_is "rejects a missing key" 1 $?
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt
+( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
   require_secrets ) >/dev/null 2>&1; rc_is "accepts RESTIC_PASSWORD" 0 $?
-( export RESTIC_PASSWORD_COMMAND="echo x" RCLONE_CONFIG_INTERNXT_TYPE=internxt
+( export RESTIC_PASSWORD_COMMAND="echo x" RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
   require_secrets ) >/dev/null 2>&1; rc_is "accepts RESTIC_PASSWORD_COMMAND (tier 2/3)" 0 $?
 ( export RESTIC_PASSWORD=x; unset RCLONE_CONFIG_INTERNXT_TYPE
   require_secrets ) >/dev/null 2>&1; rc_is "rejects an undefined remote" 1 $?
