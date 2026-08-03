@@ -85,10 +85,9 @@ RUN mkdir -p /out; \
     fi
 
 # ---------------------------------------------------------------------------
-# 4. runtime
+# 4. base — everything both the runtime and the Phase 0 image share
 # ---------------------------------------------------------------------------
-FROM debian:trixie-slim
-ARG SUPERVISOR=true
+FROM debian:trixie-slim AS base
 
 RUN set -eux; \
     apt-get update; \
@@ -97,19 +96,17 @@ RUN set -eux; \
     groupadd -g 1000 backup; \
     useradd -u 1000 -g 1000 -m -s /usr/sbin/nologin backup
 
-COPY --from=rclone-dl  /usr/local/bin/rclone         /usr/local/bin/rclone
-COPY --from=restic-dl  /usr/local/bin/restic         /usr/local/bin/restic
-COPY --from=supervisor /out/internxt-backup          /usr/local/bin/internxt-backup
-COPY docker/entrypoint.sh                            /usr/local/bin/entrypoint.sh
+COPY --from=rclone-dl /usr/local/bin/rclone /usr/local/bin/rclone
+COPY --from=restic-dl /usr/local/bin/restic /usr/local/bin/restic
+COPY docker/entrypoint.sh                   /usr/local/bin/entrypoint.sh
 
 RUN set -eux; \
     chmod 0755 /usr/local/bin/entrypoint.sh; \
-    if [ "$SUPERVISOR" != "true" ]; then rm -f /usr/local/bin/internxt-backup; fi; \
     # /state and /cache are bind-mounted at run time; create them so the
     # container still starts if a mount is missing, rather than failing
     # obscurely deep inside restic.
-    mkdir -p /state /cache/restic /cache/tmp; \
-    chown -R backup:backup /state /cache
+    mkdir -p /state /cache/restic /cache/tmp /out; \
+    chown -R backup:backup /state /cache /out
 
 # No secrets are baked in, and none are read from disk at run time.
 # RCLONE_CONFIG=/dev/null guarantees rclone never reads or writes a config
@@ -119,6 +116,36 @@ ENV RCLONE_CONFIG=/dev/null \
     RESTIC_CACHE_DIR=/cache/restic \
     TMPDIR=/cache/tmp \
     INTERNXT_BACKUP_STATE_DIR=/state
+
+# ---------------------------------------------------------------------------
+# 5. phase0 — transport proof only. Built with --target phase0.
+#
+# Carries the tools the T0-T9 scripts need (jq for parsing restic's --json,
+# diffutils for the T5 byte-exact comparison, procps for the T3 kill tests).
+# These are deliberately absent from the runtime image: the supervisor parses
+# JSON natively and never shells out to them.
+# ---------------------------------------------------------------------------
+FROM base AS phase0
+USER root
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends jq diffutils procps coreutils; \
+    rm -rf /var/lib/apt/lists/*
+COPY docker/phase0/ /phase0/
+RUN chmod 0755 /phase0/*.sh
+USER backup
+WORKDIR /out
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["sleep", "infinity"]
+
+# ---------------------------------------------------------------------------
+# 6. runtime — the production image. Last stage, so it is the default target.
+# ---------------------------------------------------------------------------
+FROM base AS runtime
+ARG SUPERVISOR=true
+
+COPY --from=supervisor /out/internxt-backup /usr/local/bin/internxt-backup
+RUN if [ "$SUPERVISOR" != "true" ]; then rm -f /usr/local/bin/internxt-backup; fi
 
 USER backup
 WORKDIR /state
