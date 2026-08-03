@@ -5,6 +5,11 @@ import { syncFiles, SyncOptions } from './src/file-sync';
 import { restoreFiles } from './src/file-restore';
 import { createScheduler } from './src/core/scheduler/scheduler';
 import { bold, blue, red } from './src/utils/logger';
+import {
+  createUsageError,
+  RunFailureCode,
+  toRunFailure,
+} from './src/runtime/run-failure';
 
 const packageJson = await Bun.file('package.json').json();
 const VERSION = packageJson.version || 'unknown';
@@ -113,113 +118,102 @@ function showVersion() {
   console.log(`internxt-backup v${VERSION}`);
 }
 
-async function main() {
-  try {
-    const rawArgs = Bun.argv.slice(2);
+function handleFatalError(error: unknown): never {
+  const failure = toRunFailure(error);
+  console.error(red(`Error: ${failure.message}`));
 
-    if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
-      showHelp();
-      process.exit(0);
-    }
-
-    if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
-      showVersion();
-      process.exit(0);
-    }
-
-    if (rawArgs.length === 0) {
-      showHelp();
-      process.exit(0);
-    }
-
-    const isRestore = rawArgs[0] === 'restore';
-
-    if (isRestore) {
-      const args = parseRestoreArgs(rawArgs.slice(1));
-
-      if (args.help) {
-        showHelp();
-        process.exit(0);
-      }
-
-      if (!args.source) {
-        console.error(red('Error: --source is required for restore'));
-        console.log();
-        showHelp();
-        process.exit(1);
-      }
-
-      if (!args.target) {
-        console.error(red('Error: --target is required for restore'));
-        console.log();
-        showHelp();
-        process.exit(1);
-      }
-
-      await restoreFiles({
-        source: args.source,
-        target: args.target,
-        pattern: args.pattern,
-        path: args.path,
-        cores: args.cores ? parseInt(args.cores) : undefined,
-        quiet: args.quiet,
-        verbose: args.verbose,
-        verify: !args['no-verify'],
-        allowPartialRestore: args['allow-partial-restore'],
-        dryRun: args['dry-run'],
-      });
-      return;
-    }
-
-    const args = parseBackupArgs(rawArgs);
-
-    if (!args.sourceDir) {
-      console.error(red('Error: Source directory is required'));
-      console.log();
-      showHelp();
-      process.exit(1);
-    }
-
-    const syncOptions: SyncOptions = {
-      cores: args.cores ? parseInt(args.cores) : undefined,
-      target: args.target,
-      quiet: args.quiet,
-      verbose: args.verbose,
-      force: args.force,
-      full: args.full,
-      syncDeletes: args['sync-deletes'],
-      resume: args.resume,
-      chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
-      dryRun: args['dry-run'],
-    };
-
-    if (args.daemon && args.schedule) {
-      console.log(blue(`Starting daemon mode with schedule: ${args.schedule}`));
-      const scheduler = createScheduler();
-      await scheduler.startDaemon({
-        sourceDir: args.sourceDir,
-        schedule: args.schedule,
-        syncOptions,
-      });
-      return;
-    }
-
-    await syncFiles(args.sourceDir, syncOptions);
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(red(`Error: ${errorMessage}`));
+  if (failure.failureCode === RunFailureCode.UsageError) {
     console.log();
     showHelp();
-    process.exit(1);
   }
+
+  process.exit(failure.exitCode);
+}
+
+async function main() {
+  const rawArgs = Bun.argv.slice(2);
+
+  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
+    showHelp();
+    process.exit(0);
+  }
+
+  if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
+    showVersion();
+    process.exit(0);
+  }
+
+  if (rawArgs.length === 0) {
+    showHelp();
+    process.exit(0);
+  }
+
+  const isRestore = rawArgs[0] === 'restore';
+
+  if (isRestore) {
+    const args = parseRestoreArgs(rawArgs.slice(1));
+
+    if (args.help) {
+      showHelp();
+      process.exit(0);
+    }
+
+    if (!args.source) {
+      throw createUsageError('--source is required for restore');
+    }
+
+    if (!args.target) {
+      throw createUsageError('--target is required for restore');
+    }
+
+    await restoreFiles({
+      source: args.source,
+      target: args.target,
+      pattern: args.pattern,
+      path: args.path,
+      cores: args.cores ? parseInt(args.cores) : undefined,
+      quiet: args.quiet,
+      verbose: args.verbose,
+      verify: !args['no-verify'],
+      allowPartialRestore: args['allow-partial-restore'],
+      dryRun: args['dry-run'],
+    });
+    return;
+  }
+
+  const args = parseBackupArgs(rawArgs);
+
+  if (!args.sourceDir) {
+    throw createUsageError('Source directory is required');
+  }
+
+  const syncOptions: SyncOptions = {
+    cores: args.cores ? parseInt(args.cores) : undefined,
+    target: args.target,
+    quiet: args.quiet,
+    verbose: args.verbose,
+    force: args.force,
+    full: args.full,
+    syncDeletes: args['sync-deletes'],
+    resume: args.resume,
+    chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
+    dryRun: args['dry-run'],
+  };
+
+  if (args.daemon && args.schedule) {
+    console.log(blue(`Starting daemon mode with schedule: ${args.schedule}`));
+    const scheduler = createScheduler();
+    await scheduler.startDaemon({
+      sourceDir: args.sourceDir,
+      schedule: args.schedule,
+      syncOptions,
+    });
+    return;
+  }
+
+  await syncFiles(args.sourceDir, syncOptions);
 }
 
 if (import.meta.main) {
-  main().catch((err) => {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(red(`Error: ${errorMessage}`));
-    console.log();
-    showHelp();
-    process.exit(1);
-  });
+  main().catch(handleFatalError);
 }

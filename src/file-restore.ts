@@ -12,6 +12,7 @@ import {
 } from './core/backup/backup-state';
 import { RestoreOptions } from './interfaces/download';
 import { matchPattern } from './utils/pattern-utils';
+import { RunFailure, RunFailureCode } from './runtime/run-failure';
 
 export async function restoreFiles(options: RestoreOptions): Promise<void> {
   acquireLock();
@@ -45,14 +46,16 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
     const cliStatus = await internxtService.checkCLI();
 
     if (!cliStatus.installed) {
-      throw new Error(
+      throw new RunFailure(
+        RunFailureCode.CliMissing,
         `Internxt CLI not found. Please install it with: npm install -g @internxt/cli\n` +
           `Error: ${cliStatus.error}`,
       );
     }
 
     if (!cliStatus.authenticated) {
-      throw new Error(
+      throw new RunFailure(
+        RunFailureCode.AuthMissing,
         `Not authenticated with Internxt. Please run: internxt login\n` +
           `Error: ${cliStatus.error}`,
       );
@@ -182,7 +185,7 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
     if (restoreResult.failedCount > 0) {
       const message = `Restore failed: ${restoreResult.failedCount} files could not be downloaded.`;
       if (strictRestore) {
-        throw new Error(message);
+        throw new RunFailure(RunFailureCode.DownloadFailed, message);
       }
       logger.warning(
         `${message} Partial restore allowed by configuration.`,
@@ -194,7 +197,7 @@ export async function restoreFiles(options: RestoreOptions): Promise<void> {
     if (verifyChecksums && restoreResult.verifyFailedCount > 0) {
       const message = `Restore verification failed: ${restoreResult.verifyFailedCount} files had checksum mismatches.`;
       if (strictRestore) {
-        throw new Error(message);
+        throw new RunFailure(RunFailureCode.VerifyFailed, message);
       }
       logger.warning(
         `${message} Partial restore allowed by configuration.`,

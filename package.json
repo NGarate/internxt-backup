@@ -37,6 +37,7 @@
     "typecheck": "tsc --noEmit",
     "build": "bun build --minify --target bun --sourcemap=linked ./index.ts --outdir ./dist/bin",
     "check": "bun run lint && bun run format && bun run typecheck && bun test",
+    "verify:release": "bun run check && bun test --coverage && bun run build",
     "fix": "bun run lint:fix && bun run format:fix",
     "prepare": "husky",
     "prepublishOnly": "bun test && bun run build",

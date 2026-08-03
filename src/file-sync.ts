@@ -11,6 +11,7 @@ import { createResumableUploader } from './core/upload/resumable-uploader';
 import { createBackupState } from './core/backup/backup-state';
 import { getStateDir } from './utils/state-dir';
 import { acquireLock, releaseLock } from './utils/lock';
+import { RunFailure, RunFailureCode } from './runtime/run-failure';
 
 export interface SyncOptions {
   cores?: number;
@@ -88,14 +89,16 @@ export async function syncFiles(
     const cliStatus = await internxtService.checkCLI();
 
     if (!cliStatus.installed) {
-      throw new Error(
+      throw new RunFailure(
+        RunFailureCode.CliMissing,
         `Internxt CLI not found. Please install it with: npm install -g @internxt/cli\n` +
           `Error: ${cliStatus.error}`,
       );
     }
 
     if (!cliStatus.authenticated) {
-      throw new Error(
+      throw new RunFailure(
+        RunFailureCode.AuthMissing,
         `Not authenticated with Internxt. Please run: internxt login\n` +
           `Error: ${cliStatus.error}`,
       );
@@ -139,11 +142,27 @@ export async function syncFiles(
 
     uploader.setFileScanner(fileScanner);
 
-    const scanResult = await fileScanner.scan();
+    const scanResult = await fileScanner.scan().catch((error: unknown) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      throw new RunFailure(
+        RunFailureCode.ScanFailed,
+        `Failed to scan source directory: ${errorMessage}`,
+        { cause: error },
+      );
+    });
 
     // Differential backup logic
     const backupState = makeBackupState(verbosity);
-    await backupState.loadBaseline();
+    await backupState.loadBaseline().catch((error: unknown) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      throw new RunFailure(
+        RunFailureCode.StateReadFailed,
+        `Failed to load backup state: ${errorMessage}`,
+        { cause: error },
+      );
+    });
 
     let filesToUpload = scanResult.filesToUpload;
 
@@ -194,6 +213,7 @@ export async function syncFiles(
     }
 
     if (deletedFiles.length > 0) {
+      const failedDeletes: string[] = [];
       logger.warning(
         `${deletedFiles.length} files were deleted locally since last backup:`,
         verbosity,
@@ -219,12 +239,34 @@ export async function syncFiles(
             targetDir === '/'
               ? `/${normalizedRelativePath}`
               : `${targetDir}/${normalizedRelativePath}`;
-          const deleted = await internxtService.deleteFile(remotePath);
-          if (deleted) {
-            logger.success(`Deleted remote: ${remotePath}`, verbosity);
-          } else {
-            logger.warning(`Failed to delete remote: ${remotePath}`, verbosity);
+          try {
+            const deleted = await internxtService.deleteFile(remotePath);
+            if (deleted) {
+              logger.success(`Deleted remote: ${remotePath}`, verbosity);
+            } else {
+              failedDeletes.push(remotePath);
+              logger.warning(
+                `Failed to delete remote: ${remotePath}`,
+                verbosity,
+              );
+            }
+          } catch (error) {
+            failedDeletes.push(remotePath);
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            logger.warning(
+              `Failed to delete remote: ${remotePath} (${errorMessage})`,
+              verbosity,
+            );
           }
+        }
+
+        if (failedDeletes.length > 0) {
+          const preview = failedDeletes.slice(0, 5).join(', ');
+          throw new RunFailure(
+            RunFailureCode.DeleteSyncFailed,
+            `Delete sync failed: ${failedDeletes.length} remote deletions did not complete. Failed paths: ${preview}`,
+          );
         }
       }
     }
@@ -237,7 +279,8 @@ export async function syncFiles(
       uploadSucceeded = uploadResult.success;
       if (!uploadResult.success) {
         const preview = uploadResult.failedPaths.slice(0, 5).join(', ');
-        throw new Error(
+        throw new RunFailure(
+          RunFailureCode.UploadFailed,
           `Backup failed: ${uploadResult.failedFiles} uploads did not complete. Failed files: ${preview}`,
         );
       }
@@ -250,7 +293,15 @@ export async function syncFiles(
         options.target || '/',
         scanResult.allFiles,
       );
-      await backupState.saveBaseline(snapshot);
+      await backupState.saveBaseline(snapshot).catch((error: unknown) => {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        throw new RunFailure(
+          RunFailureCode.StateWriteFailed,
+          `Failed to persist backup state: ${errorMessage}`,
+          { cause: error },
+        );
+      });
       await backupState.uploadManifest(internxtService, options.target || '/');
 
       if (options.full) {

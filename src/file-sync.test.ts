@@ -11,6 +11,7 @@ import type {
 } from './interfaces/file-scanner';
 import type { FileScanner } from './core/file-scanner';
 import type { Uploader } from './core/upload/uploader';
+import { RunFailureCode } from './runtime/run-failure';
 import {
   createMockBackupState,
   createMockFileInfo,
@@ -361,9 +362,104 @@ describe('syncFiles', () => {
         releaseLock: () => {},
       };
 
+      const failure = await syncFiles(
+        '/source',
+        { target: '/Backups' },
+        dependencies,
+      )
+        .then(() => null)
+        .catch((error) => error);
+
+      expect(failure).toBeDefined();
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain('uploads did not complete');
+      expect(failure).toMatchObject({
+        failureCode: RunFailureCode.UploadFailed,
+        exitCode: 13,
+      });
+
+      expect(startUpload).toHaveBeenCalledTimes(1);
+      expect(mockBackupState.saveBaseline).not.toHaveBeenCalled();
+      expect(mockBackupState.uploadManifest).not.toHaveBeenCalled();
+    });
+
+    it('should fail before saving baseline when remote delete sync is incomplete', async () => {
+      const files: FileInfo[] = [createFile('changed.txt', 'new-checksum')];
+      const scanResult: ScanResult = {
+        allFiles: files,
+        filesToUpload: [],
+        totalSizeBytes: files.reduce((total, file) => total + file.size, 0),
+        totalSizeMB: '0.00',
+      };
+
+      const scannerBase = createMockFileScanner();
+      const mockScanner = {
+        ...scannerBase,
+        scan: mock(() => Promise.resolve(scanResult)),
+        loadState: mock(() => Promise.resolve()),
+      } as unknown as FileScanner;
+
+      const mockInternxt = createMockInternxtService();
+      mockInternxt.deleteFile = mock(() => Promise.resolve(false));
+
+      const mockBackupState = createMockBackupState();
+      mockBackupState.getBaseline = mock(() => ({
+        version: 1,
+        timestamp: '2026-01-01T00:00:00Z',
+        sourceDir: '/source',
+        targetDir: '/Backups',
+        files: {
+          'removed.txt': {
+            checksum: 'old-checksum',
+            size: 128,
+            mode: 0o644,
+            mtime: '2026-01-01T00:00:00Z',
+          },
+        },
+      }));
+      mockBackupState.detectDeletions = mock(() => ['removed.txt']);
+
+      const mockUploader = {
+        startUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            totalFiles: 0,
+            succeededFiles: 0,
+            failedFiles: 0,
+            failedPaths: [],
+          }),
+        ),
+        setFileScanner: mock(() => {}),
+        handleFileUpload: mock(() =>
+          Promise.resolve({
+            success: true,
+            filePath: 'changed.txt',
+          }),
+        ),
+      } as Uploader;
+
+      const dependencies: SyncDependencies = {
+        createInternxtService: () => mockInternxt,
+        createFileScanner: () => mockScanner,
+        createHashCache: () => createMockHashCache(),
+        createProgressTracker: () => createMockProgressTracker(),
+        createUploader: () => mockUploader,
+        createBackupState: () => mockBackupState,
+        getOptimalConcurrency: () => 1,
+        acquireLock: () => {},
+        releaseLock: () => {},
+      };
+
       await expect(
-        syncFiles('/source', { target: '/Backups' }, dependencies),
-      ).rejects.toThrow('uploads did not complete');
+        syncFiles(
+          '/source',
+          { target: '/Backups', syncDeletes: true },
+          dependencies,
+        ),
+      ).rejects.toMatchObject({
+        failureCode: RunFailureCode.DeleteSyncFailed,
+        exitCode: 16,
+      });
 
       expect(mockBackupState.saveBaseline).not.toHaveBeenCalled();
       expect(mockBackupState.uploadManifest).not.toHaveBeenCalled();

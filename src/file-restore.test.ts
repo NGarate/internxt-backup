@@ -8,6 +8,7 @@ import * as backupStateModule from './core/backup/backup-state';
 import * as downloaderModule from './core/download/downloader';
 import * as progressTrackerModule from './core/upload/progress-tracker';
 import * as envUtilsModule from './utils/env-utils';
+import { RunFailureCode } from './runtime/run-failure';
 import {
   spyOn,
   createMockInternxtService,
@@ -111,9 +112,10 @@ describe('restoreFiles', () => {
         target: '/tmp/restore',
       };
 
-      await expect(restoreFiles(options)).rejects.toThrow(
-        'Internxt CLI not found',
-      );
+      await expect(restoreFiles(options)).rejects.toMatchObject({
+        failureCode: RunFailureCode.CliMissing,
+        exitCode: 10,
+      });
       expect(releaseLockSpy).toHaveBeenCalled();
     });
 
@@ -132,7 +134,10 @@ describe('restoreFiles', () => {
         target: '/tmp/restore',
       };
 
-      await expect(restoreFiles(options)).rejects.toThrow('Not authenticated');
+      await expect(restoreFiles(options)).rejects.toMatchObject({
+        failureCode: RunFailureCode.AuthMissing,
+        exitCode: 11,
+      });
       expect(releaseLockSpy).toHaveBeenCalled();
     });
 
@@ -431,9 +436,10 @@ describe('restoreFiles', () => {
         target: '/tmp/restore',
       };
 
-      await expect(restoreFiles(options)).rejects.toThrow(
-        'files could not be downloaded',
-      );
+      await expect(restoreFiles(options)).rejects.toMatchObject({
+        failureCode: RunFailureCode.DownloadFailed,
+        exitCode: 14,
+      });
     });
 
     it('should fail in strict mode when checksum verification fails', async () => {
@@ -472,9 +478,10 @@ describe('restoreFiles', () => {
         verify: true,
       };
 
-      await expect(restoreFiles(options)).rejects.toThrow(
-        'checksum mismatches',
-      );
+      await expect(restoreFiles(options)).rejects.toMatchObject({
+        failureCode: RunFailureCode.VerifyFailed,
+        exitCode: 15,
+      });
     });
 
     it('should always release lock even on error', async () => {
