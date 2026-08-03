@@ -6,11 +6,9 @@
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "chalk": ["./test-config/mocks/chalk-mock.ts"],
-      "webdav": ["./test-config/mocks/webdav-mock.ts"]
-    },
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+      "*": ["./node_modules/*"],
+      "#src/*": ["./src/*"]
+    }
   },
   "include": [
     "src/**/*.ts",

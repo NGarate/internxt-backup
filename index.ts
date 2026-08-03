@@ -10,9 +10,13 @@ import {
   RunFailureCode,
   toRunFailure,
 } from './src/runtime/run-failure';
+// Statically imported so the version is baked in at build time. Reading
+// package.json at runtime resolved against the process CWD, which meant the
+// installed binary threw on startup outside the project directory, or
+// reported an unrelated project's version.
+import { version } from './package.json';
 
-const packageJson = await Bun.file('package.json').json();
-const VERSION = packageJson.version || 'unknown';
+const VERSION = version || 'unknown';
 
 function parseBackupArgs(args: string[]) {
   const { values, positionals } = parseArgs({
@@ -69,7 +73,7 @@ function showHelp() {
   console.log(`
 ${bold(`Internxt Backup v${VERSION} - A simple CLI for backing up files to Internxt Drive`)}
 
-${bold(`Usage: internxt-backup <source-dir> [options]`)})
+${bold(`Usage: internxt-backup <source-dir> [options]`)}
 ${bold(`       internxt-backup restore [options]`)}
 
 ${bold('Backup Options:')}
