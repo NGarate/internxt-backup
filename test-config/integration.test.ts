@@ -2,8 +2,14 @@
  * Integration Tests for Internxt Backup CLI Tool
  *
  * NOTE:
- * This file is currently a placeholder. The project still needs a real
- * Internxt-backed integration or E2E harness that exercises the full stack.
+ * This file remains a placeholder until the repository has a live
+ * Internxt-backed E2E environment.
+ *
+ * The source-of-truth contracts for replacing this placeholder are:
+ * - `docs/verification-contract.md`
+ * - `docs/live-e2e-harness.md`
+ * - `docs/run-report.schema.json`
+ * - `docs/verifiable-backlog.md`
  *
  * The following areas are already covered by unit or behavior tests:
  * - `uploader.test.ts` tests the core file upload functionality
@@ -15,26 +21,24 @@
  * - `index.test.ts` tests the CLI argument parsing and main flow
  *
  * A future real E2E suite should cover:
- * 1. Complete workflow with default settings
- * 2. Differential backup after a saved baseline
- * 3. Restore with checksum verification
- * 4. Error handling when Internxt CLI is not installed
- * 5. Error handling when not authenticated with Internxt
- * 6. Provider-side upload and download failures
- * 7. Delete sync behavior
- * 8. Scheduled backup daemon mode
- * 9. Auth expiry during long operations
- * 10. Release-blocking smoke validation
+ * 1. complete workflow with default settings
+ * 2. differential backup after a saved baseline
+ * 3. restore with checksum verification
+ * 4. error handling when Internxt CLI is not installed
+ * 5. error handling when not authenticated with Internxt
+ * 6. provider-side upload and download failures
+ * 7. delete sync behavior
+ * 8. scheduled backup daemon mode
+ * 9. auth expiry during long operations
+ * 10. release-blocking smoke validation
  *
  * Until that exists, this test documents the missing coverage area explicitly.
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 describe('Integration Tests', () => {
   it('should document integration test scope', () => {
-    // This test serves as documentation for the integration test scope
-    // See file comments above for details
     expect(true).toBe(true);
   });
 });

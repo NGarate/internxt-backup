@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0.0",
+  "runId": "2026-03-23T01:20:00Z-backup-smoke",
+  "mode": "backup",
+  "status": "success",
+  "startedAt": "2026-03-23T01:20:00Z",
+  "finishedAt": "2026-03-23T01:20:19Z",
+  "durationMs": 19000,
+  "command": {
+    "argv": [
+      "internxt-backup",
+      "/tmp/internxt-backup-e2e/source",
+      "--target=/CodexE2E/internxt-backup",
+      "--full"
+    ],
+    "version": "0.4.0"
+  },
+  "paths": {
+    "source": "/tmp/internxt-backup-e2e/source",
+    "target": "/CodexE2E/internxt-backup",
+    "pathFilter": null,
+    "patternFilter": null
+  },
+  "counts": {
+    "scannedFiles": 4,
+    "selectedFiles": 4,
+    "uploadedFiles": 4,
+    "downloadedFiles": 0,
+    "failedFiles": 0,
+    "verifiedFiles": 0,
+    "verifyFailedFiles": 0,
+    "deletedRemoteFiles": 0,
+    "retriedOperations": 0
+  },
+  "exitCode": 0,
+  "failureCode": "none",
+  "warnings": [],
+  "failedPaths": [],
+  "artifacts": {
+    "manifestPath": "/tmp/internxt-backup-e2e/artifacts/manifest.json",
+    "logPath": "/tmp/internxt-backup-e2e/artifacts/backup.log",
+    "reportPath": "/tmp/internxt-backup-e2e/artifacts/run-report.json",
+    "restoreDiffPath": null
+  }
+}

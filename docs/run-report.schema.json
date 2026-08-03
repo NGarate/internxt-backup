@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ngarate.github.io/internxt-backup/schemas/run-report.schema.json",
+  "title": "internxt-backup run report",
+  "description": "Machine-readable artifact for backup and restore executions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "mode",
+    "status",
+    "startedAt",
+    "finishedAt",
+    "durationMs",
+    "command",
+    "paths",
+    "counts",
+    "exitCode",
+    "failureCode",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["backup", "restore"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial", "failure", "dry-run"]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "version"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pathFilter": {
+          "type": ["string", "null"]
+        },
+        "patternFilter": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scannedFiles",
+        "selectedFiles",
+        "uploadedFiles",
+        "downloadedFiles",
+        "failedFiles",
+        "verifiedFiles",
+        "verifyFailedFiles",
+        "deletedRemoteFiles"
+      ],
+      "properties": {
+        "scannedFiles": { "type": "integer", "minimum": 0 },
+        "selectedFiles": { "type": "integer", "minimum": 0 },
+        "uploadedFiles": { "type": "integer", "minimum": 0 },
+        "downloadedFiles": { "type": "integer", "minimum": 0 },
+        "failedFiles": { "type": "integer", "minimum": 0 },
+        "verifiedFiles": { "type": "integer", "minimum": 0 },
+        "verifyFailedFiles": { "type": "integer", "minimum": 0 },
+        "deletedRemoteFiles": { "type": "integer", "minimum": 0 },
+        "retriedOperations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "exitCode": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failureCode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "usage-error",
+        "cli-missing",
+        "auth-missing",
+        "scan-failed",
+        "upload-failed",
+        "download-failed",
+        "verify-failed",
+        "delete-sync-failed",
+        "state-write-failed",
+        "state-read-failed",
+        "timeout",
+        "interrupted",
+        "provider-error",
+        "unknown"
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failedPaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestPath", "logPath"],
+      "properties": {
+        "manifestPath": {
+          "type": ["string", "null"]
+        },
+        "logPath": {
+          "type": ["string", "null"]
+        },
+        "reportPath": {
+          "type": ["string", "null"]
+        },
+        "restoreDiffPath": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}
