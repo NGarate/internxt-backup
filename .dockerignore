@@ -1,0 +1,33 @@
+# Keep the build context small and, more importantly, correct.
+#
+# The supervisor stage runs `bun install --frozen-lockfile` and then `COPY . .`.
+# Without this file the host's node_modules (built against the host's libc and
+# architecture) would be copied over the freshly installed one, producing a
+# binary built from whatever happened to be on the developer's machine.
+
+node_modules
+.git
+.github
+dist
+coverage
+*.log
+
+# Local tooling and editor state
+.claude
+.cursor
+.husky
+.vscode
+.idea
+.DS_Store
+
+# Test scratch and build artifacts
+test-fixtures/tmp
+*.tsbuildinfo
+
+# Nothing secret should exist in the repo, but never ship one by accident.
+.env
+.env.*
+*.pem
+*.key
+rclone.conf
+restic-password
