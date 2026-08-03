@@ -33,7 +33,22 @@ jobs:
         run: bun run format
       - name: Type check
         run: bun run typecheck
-      - name: Security audit
+      - name: Shell tests
+        run: bun run test:shell
+      # Blocking: the dependency tree that actually ships. It is one package
+      # (croner), so a finding here is real and actionable.
+      - name: Security audit (production)
+        run: bun audit --prod
+      # Non-blocking: build-time only. semantic-release pulls ~66 advisories
+      # through conventional-changelog (handlebars, picomatch, sigstore) that
+      # `bun update` cannot resolve, because they are pinned inside its tree.
+      # None of it reaches the compiled binary, which bundles index.ts and src
+      # only. Blocking on them left CI red from 2026-02-28 onward, which is
+      # worse than not gating: a permanently failing pipeline is one nobody
+      # reads. Reported so drift stays visible, and so a genuinely new
+      # advisory is not hidden by the standing noise.
+      - name: Security audit (dev, informational)
+        continue-on-error: true
         run: bun audit
 
   test:
