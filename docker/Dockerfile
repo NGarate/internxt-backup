@@ -20,16 +20,20 @@
 # overridden to `sleep infinity`, so the numbers it produces come from the
 # real runtime rather than a laptop. See docker/docker-compose.phase0.yml.
 
-# Global — must precede the first FROM so it can be interpolated into one.
-# `release` uses the official signed binary; `totp` builds v1.75.0 with the
-# unmerged 2FA patch, which accounts with 2FA require. Leaving the default at
-# `release` means the Go toolchain stage is never even pulled unless opted in.
-ARG RCLONE_VARIANT=release
-
 # ---------------------------------------------------------------------------
-# 1a. rclone — official release binary (RCLONE_VARIANT=release, the default)
+# 1. rclone — official release binary only.
+#
+# Released versions only: no unmerged PRs, no patched builds, no source
+# compilation. A dependency that exists only as an open pull request can be
+# force-pushed, rebased or abandoned, and pinning a SHA does not make an
+# unreviewed branch a supported artifact.
+#
+# Consequence worth knowing: released rclone cannot re-authenticate to
+# Internxt unattended when 2FA is enabled, because supplying a TOTP code has
+# no headless path (rclone#9529 is unmerged). Phase 0 measures the resulting
+# token lifetime and reports it; see docs/manual-testing.md for the options.
 # ---------------------------------------------------------------------------
-FROM debian:trixie-slim AS rclone-release
+FROM debian:trixie-slim AS rclone-dl
 ARG RCLONE_VERSION=1.75.0
 ARG RCLONE_SHA256=aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
 ARG TARGETARCH=amd64
@@ -47,52 +51,6 @@ RUN set -eux; \
     # reason we pin >=1.73, and a silent regression here would not surface
     # until the first backup run.
     /usr/local/bin/rclone help backends | grep -qw internxt
-
-# ---------------------------------------------------------------------------
-# 1b. rclone — release + TOTP patch (RCLONE_VARIANT=totp)
-#
-# Required for accounts with 2FA enabled. The stock backend cannot log in
-# unattended: it needs a mnemonic and a token that only an interactive
-# `rclone config` produces, and when the token expires it re-authenticates
-# from email+password, which needs a fresh TOTP code and has no headless path.
-#
-# rclone PR #9529 adds `otp_secret_key`, so rclone generates codes itself from
-# the TOTP seed. It is UNMERGED — the maintainer objected on 2026-07-10 that
-# storing the seed materially weakens 2FA, which is true and is a deliberate
-# trade-off documented in docs/security.md.
-#
-# The patch is vendored rather than fetched from GitHub at build time, so the
-# build is reproducible, reviewable in-tree, and cannot change under a
-# force-push. Verified to apply cleanly to the v1.75.0 tag, so this is the
-# pinned release plus two backend files — not an unreleased master snapshot.
-# `github.com/pquerna/otp v1.5.0` is already a direct dependency of rclone
-# v1.75.0, so go.mod is untouched.
-# ---------------------------------------------------------------------------
-FROM golang:1.25 AS rclone-totp
-ARG RCLONE_VERSION=1.75.0
-ARG RCLONE_PATCH_SHA256=d32baef369280d2063acc675101484c0a2eb1f9e993d9365c8cc0f8e391cbaa6
-WORKDIR /build
-COPY docker/patches/rclone-9529-internxt-totp.patch /build/totp.patch
-RUN set -eux; \
-    echo "${RCLONE_PATCH_SHA256}  /build/totp.patch" | sha256sum -c -; \
-    git clone --quiet --depth 1 --branch "v${RCLONE_VERSION}" \
-        https://github.com/rclone/rclone.git src; \
-    cd src; \
-    # Only the backend hunks: docs/content is not compiled and drifts.
-    git apply --include='backend/internxt/*' /build/totp.patch; \
-    git --no-pager diff --stat; \
-    CGO_ENABLED=0 go build -trimpath -tags noselfupdate \
-        -ldflags "-s -w -X github.com/rclone/rclone/fs.Version=v${RCLONE_VERSION}-totp" \
-        -o /usr/local/bin/rclone .; \
-    /usr/local/bin/rclone version; \
-    /usr/local/bin/rclone help backends | grep -qw internxt; \
-    # The entire point of this stage. If the option is absent the patch
-    # silently did nothing, and 2FA re-auth would fail days later mid-seed.
-    /usr/local/bin/rclone help backend internxt | grep -q 'otp-secret-key'
-
-# Selects which rclone the rest of the build uses. `totp` is required for
-# accounts with 2FA; see docs/security.md.
-FROM rclone-${RCLONE_VARIANT} AS rclone-dl
 
 # ---------------------------------------------------------------------------
 # 2. restic

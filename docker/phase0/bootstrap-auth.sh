@@ -24,10 +24,14 @@
 #
 # TOKEN EXPIRY IS AN OPEN QUESTION. When the token expires the backend
 # re-authenticates from email+pass, which with 2FA enabled needs a TOTP code
-# and has no unattended path (rclone#9529 is still open, and the maintainer
-# has objected that storing a TOTP seed materially weakens 2FA). Phase 0
-# detects this and reports it rather than failing obscurely. See
-# docs/manual-testing.md for the options if it bites.
+# and has no unattended path in any released rclone. Phase 0 detects this,
+# reports it rather than failing obscurely, and measures how long the token
+# actually lasts. See docs/manual-testing.md for the options.
+#
+# The TOTP seed prompt below activates only if the rclone in use exposes
+# otp_secret_key. No release does today, so it is normally skipped. It is
+# written this way so it starts working the day upstream ships support,
+# without this project depending on an unmerged branch.
 
 set -euo pipefail
 

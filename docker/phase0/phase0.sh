@@ -53,10 +53,10 @@ t0() {
       record T0 WARN "rclone supports otp_secret_key but none is set; expiry will still need a human"
     fi
   elif [ -n "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
-    record T0 FAIL "OTP secret set but this rclone ignores it — rebuild with --build-arg RCLONE_VARIANT=totp"
+    record T0 FAIL "OTP secret is set but this rclone release ignores it; it would be silently unused"
     return 1
   else
-    record T0 WARN "stock rclone: no unattended re-auth. Fine for a short run, not for a multi-day seed on a 2FA account"
+    record T0 WARN "released rclone has no unattended re-auth for 2FA accounts; this run works until the token expires"
   fi
 
   # About() is implemented by this backend, which is what makes T6 measurable.

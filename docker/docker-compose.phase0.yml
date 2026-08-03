@@ -11,7 +11,6 @@
 #
 # Build the transport-only image (no Bun binary needed yet):
 #   docker build -f docker/Dockerfile --target phase0 \
-#     --build-arg RCLONE_VARIANT=totp \
 #     -t internxt-backup:phase0 .
 
 services:

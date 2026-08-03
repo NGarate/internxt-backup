@@ -174,72 +174,52 @@ export RCLONE_CONFIG_INTERNXT_TOKEN='...'
 paid tiers in 2025 and de-entitled some lifetime accounts. If `rclone about`
 fails with an authorisation error, nothing downstream matters.
 
-### C3b. The TOTP seed — required for unattended operation
+### C3b. Unattended re-authentication is not available today
 
-Everything above works until the session token expires, at which point rclone
-re-authenticates from email + password and needs a fresh 2FA code. There is no
-headless way to supply one on the stock build, so backups stop until a human
-runs the bootstrap again.
+This project uses **released versions only** — no unmerged PRs, no patched
+builds, no source compilation. A dependency that exists only as an open pull
+request can be force-pushed, rebased or abandoned, and pinning a commit does
+not turn an unreviewed branch into a supported artifact.
 
-[rclone#9529](https://github.com/rclone/rclone/pull/9529) adds `otp_secret_key`:
-give rclone the TOTP **seed** and it generates codes itself. Build with it:
+The consequence is concrete and worth stating once: **no released rclone can
+re-authenticate to Internxt unattended while 2FA is enabled.** Supplying a TOTP
+code has no headless path. `otp_secret_key` exists only in
+[rclone#9529](https://github.com/rclone/rclone/pull/9529), which is unmerged
+with changes requested.
 
-```bash
-docker build -f docker/Dockerfile --target phase0 \
-  --build-arg RCLONE_VARIANT=totp \
-  -t internxt-backup:phase0 .
-```
+So a session works until its token expires, then backups stop until someone
+re-runs the bootstrap with an authenticator to hand. How long that is has never
+been published, which is exactly why C4 measures it.
 
-This compiles rclone **v1.75.0 plus two backend files** — the patch is
-vendored in `docker/patches/` and verified to apply cleanly to the release tag,
-so it is not an unreleased master snapshot. `github.com/pquerna/otp` is already
-a direct dependency of v1.75.0, so `go.mod` is untouched. The build fails if
-`otp-secret-key` is absent from the resulting binary, because a patch that
-silently did nothing would only surface days later mid-seed.
+The scripts detect `otp_secret_key` at **runtime**, not build time, so the day
+a release ships it this starts working with no code change — and until then
+nothing here depends on an unmerged branch.
 
-`bootstrap-auth.sh` then offers to store the seed and re-verifies the remote
-before emitting it. The seed is the base32 string behind the QR code you
-scanned when enabling 2FA (e.g. `JBSWY3DPEHPK3PXP`). **If you did not save it**,
-get a fresh one by disabling and re-enabling 2FA in Internxt's security
-settings.
+**Your options, given released-only:**
 
-> **The trade-off, stated plainly.** Anything holding the seed can mint valid
-> codes, so storing it reduces 2FA to a second stored secret _for automated
-> access_. rclone's maintainer made exactly this objection on 2026-07-10, and
-> it is correct. What you keep: 2FA still protects interactive and web login,
-> and the seed lives only in environment variables — never on disk, never in
-> the compose file. What you accept: an attacker with your environment can
-> authenticate as you. Weigh it against the alternative, which is disabling 2FA
-> outright — strictly worse, since that drops it for interactive login too.
+|                                | Trade-off                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Re-bootstrap on expiry**     | Costs a human every time the token dies. Viable if C4 shows a long lifetime; painful for a ~10-day seed. Seed units are independent and restic resumes, so it is survivable — just manual.                          |
+| **Disable 2FA on the account** | Makes released rclone fully unattended. You are already placing the password and mnemonic in the environment, so the marginal loss is 2FA on _interactive and web_ login. That is a real loss, and it is your call. |
+| **Switch provider**            | B2 application keys and Storj access grants are designed for machines, never expire this way, and are shipped in released rclone. Precisely what keeping `[repo] backend` pluggable was for.                        |
+| **Wait for #9529**             | No timeline; changes requested 2026-07-10.                                                                                                                                                                          |
 
-Because it is an unmerged PR, pin the image and do not rebuild casually. If
-#9529 lands upstream, drop the patch and go back to `RCLONE_VARIANT=release`.
+### C4. Measuring the token lifetime
 
-### C4. Measuring the token lifetime anyway
+Nobody has published how long an Internxt session token lasts, so Phase 0
+measures it rather than guessing.
 
-When the token expires the backend re-authenticates from email + password —
-which with 2FA enabled needs a TOTP code and has **no unattended path**.
-Unattended TOTP support ([rclone#9529](https://github.com/rclone/rclone/pull/9529))
-is still an open PR; the maintainer objected on 10 Jul 2026 that storing a TOTP
-seed "materially weakens 2FA".
+`t0` stamps `auth-verified-at.txt`. Every later test scans its stderr for
+rclone's reconnect request, so if the session dies mid-run you get an explicit
+`AUTH FAIL` verdict naming the test it died in — not an obscure transport
+error. The delta between the two is your usable lifetime.
 
-Nobody has published the token lifetime, so Phase 0 measures it. `t0` stamps
-`auth-verified-at.txt`, and every later test scans its stderr for rclone's
-reconnect request. If the session dies mid-run you get an explicit `AUTH FAIL`
-verdict naming the test, and the delta is the usable lifetime.
+That single number decides which option in C3b you take:
 
-**If the token survives Phase 0 (~a day), nightly incrementals are viable and
-you re-bootstrap occasionally.** If it dies inside a few hours, a ~10-day seed
-is not viable as-is, and the options are:
-
-|                                | Trade-off                                                                                                                                                                                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Build rclone with PR #9529** | Adds `otp_secret_key` for auto-generated codes, and fixes a re-auth bug where transient failures permanently disabled the remote. Unmerged, so pin a commit. Storing the seed weakens 2FA for automation while keeping it for interactive login. |
-| **Disable 2FA on the account** | Simplest. Weaker than the above, not stronger: you are already placing the password and mnemonic on the NAS, and this additionally removes 2FA from _interactive_ login.                                                                         |
-| **Split the seed**             | Re-bootstrap between seed units. Works because seed units are independent and restic resumes, but needs a human every few hours.                                                                                                                 |
-| **Switch provider**            | B2 application keys and Storj access grants are designed for machines and never expire this way. Exactly what keeping `[repo] backend` pluggable was for.                                                                                        |
-
-Nothing here is decided by this repo — it is a real constraint of the provider.
+- **Survives Phase 0 (~a day)** → nightly incrementals are fine; re-bootstrap
+  occasionally, and the seed is workable in units.
+- **Dies within hours** → a ~10-day seed is not practical by hand. Disabling
+  2FA or switching provider become the realistic choices.
 
 ---
 

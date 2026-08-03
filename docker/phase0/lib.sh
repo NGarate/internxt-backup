@@ -85,7 +85,9 @@ require_secrets() {
   #
   #  (a) OTP_SECRET_KEY set — the TOTP seed. rclone generates codes itself and
   #      can log in from scratch, so re-authentication survives token expiry
-  #      unattended. Requires the patched rclone (RCLONE_VARIANT=totp).
+  #      unattended. NOT available in any released rclone today; the check is
+  #      here so this starts working the day upstream ships it, without
+  #      depending on an unmerged branch in the meantime.
   #  (b) MNEMONIC + TOKEN set — captured from a one-time interactive login.
   #      Works until the token expires, then needs a human with an authenticator.
   #
