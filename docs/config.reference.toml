@@ -1,0 +1,157 @@
+# internxt-backup configuration reference.
+#
+# Every key is shown with its default. Only [repo].path and the [[source]]
+# sanity band are required; everything else may be omitted.
+#
+# Validate a config with:
+#     internxt-backup config --config=/path/to/config.toml
+#
+# Two rules worth knowing before editing:
+#
+#   1. Unknown keys are an ERROR, not a warning. A typo'd `keep_dayly` would
+#      otherwise silently mean "keep nothing", which surfaces only when a
+#      restore is needed.
+#   2. Credentials must never appear here. Validation rejects any
+#      credential-shaped key, which keeps this file safe to paste into a bug
+#      report. Secrets arrive through the environment — see docs/security.md.
+
+schema_version = 1
+
+[repo]
+# Only "rclone" today. Kept pluggable so moving to B2 or Storj is a config
+# change rather than a rewrite.
+backend = "rclone"
+
+# rclone remote name. Must match the remote defined in the rclone config.
+remote = "internxt"
+
+# Path within the remote. REQUIRED.
+path = "restic/nas1"
+
+# Must be a real, writable file — never /dev/null. rclone persists rotated
+# JWTs here, and that persistence is what keeps 2FA to a single bootstrap
+# instead of a prompt at every token expiry.
+rclone_config = "/state/rclone.conf"
+
+# Needs >= 2 GiB: it holds pack_size_mib x (connections + 1) of in-flight
+# packs. Put it on disk, not a small tmpfs.
+cache_dir = "/cache/restic"
+tmp_dir = "/cache/tmp"
+
+rclone_program = "/usr/local/bin/rclone"
+restic_program = "/usr/local/bin/restic"
+
+# 4..128 MiB. Internxt charges roughly 25-33s of metadata work per object, so
+# larger packs mean far fewer objects and a much faster seed — at 16 MiB the
+# initial upload is metadata-bound rather than bandwidth-bound. See
+# docs/architecture.md for the arithmetic.
+pack_size_mib = 128
+
+# restic's -o rclone.connections. Kept modest: Internxt appears to throttle or
+# block aggressive parallelism.
+connections = 4
+
+# Backups run under `rclone serve restic --append-only`, so ransomware on the
+# NAS cannot delete the repository through the nightly path. Prune uses a
+# separate mutating profile, a handful of times a year.
+append_only_backups = true
+
+[secrets]
+# Where the restic passphrase comes from. It is never stored here.
+#   prompt  — supplied interactively or over a FIFO; nothing on disk
+#   command — read from a command's stdout; the integration point for Tang,
+#             a secrets manager, or a TPM
+#   env     — read from an environment variable
+provider = "prompt"
+
+# For provider = "command". The passphrase is its stdout.
+#   command = "clevis decrypt < /state/key.jwe"
+#   command = "bws secret get $ID --output json | jq -r .value"
+
+# For provider = "env". Defaults to RESTIC_PASSWORD.
+#   variable = "RESTIC_PASSWORD"
+
+# Retries matter for command providers: after a power cut the NAS often boots
+# before the machine holding the key, and a one-shot resolve would turn that
+# race into a silently skipped backup.
+retries = 10
+retry_delay = "30s"
+
+# One [[source]] per tree to back up. At least one is required.
+[[source]]
+name = "photos" # used as a restic tag and in report filenames
+path = "/data/photos" # must be absolute; mount it read-only
+
+tags = []
+exclude = ["**/@eaDir/**", "**/#recycle/**", "**/.DS_Store", "**/Thumbs.db"]
+exclude_caches = true
+exclude_if_present = [".nobackup"]
+one_file_system = true
+
+# THE SANITY BAND. Required, deliberately.
+#
+# `restic backup` against an unmounted share produces a perfectly valid
+# snapshot containing nothing, and retention then ages out the good ones —
+# with every command exiting 0. Preflight refuses to run when a source falls
+# below these, or shrinks by more than max_shrink_pct against the last
+# successful run.
+min_files = 1000
+min_bytes = "10G" # K/M/G/T are 1024-based; KB/MB/GB are rejected as ambiguous
+max_shrink_pct = 50
+
+[schedule]
+timezone = "UTC"
+backup = "0 2 * * *"
+verify = "0 5 * * 0"
+prune = "0 4 1 */3 *" # quarterly: prune is the riskiest operation, and with
+# ample quota the space it reclaims has little value
+drill = "0 6 1 */3 *"
+
+[retention]
+keep_last = 3
+keep_daily = 7
+keep_weekly = 4
+keep_monthly = 12
+keep_yearly = 3
+group_by = "host,paths"
+max_unused = "5%"
+max_repack_size = "20G"
+
+[verify]
+# restic's `check` is the ONLY integrity mechanism here: rclone's Internxt
+# backend supports no hashes, so it never checksum-verifies an upload.
+structural_every_run = false
+
+# `check --read-data-subset=n/divisor`, with n advancing each run. A full
+# read-data pass downloads the entire repository, so coverage is spread out.
+# At ~4 TB: 52 is roughly 79 GB per run and full coverage in a year; 26 is
+# double the weekly load for coverage in six months.
+read_data_subset_divisor = 52
+cursor_file = "/state/verify-cursor.json"
+
+[bandwidth]
+# Passed to rclone verbatim as RCLONE_BWLIMIT. A plain rate ("2M", "off") or a
+# timetable.
+#   timetable = "00:00,off 08:00,2M 18:00,off"
+
+# Transactions per second, for the same throttling concern as connections.
+#   tps_limit = 8
+#   tps_limit_burst = 4
+
+# HH:MM at which a running backup is SIGINTed. restic exits 130, having
+# committed what it finished, and the next run continues from there.
+#   window_stop = "07:30"
+
+[limits]
+read_concurrency = 2
+
+# Durations always need a unit — s, m, h or d. A bare number is rejected,
+# because a timeout wrong by 60x either aborts healthy runs or never fires.
+backup_timeout = "20h"
+verify_timeout = "8h"
+prune_timeout = "12h"
+
+[reports]
+dir = "/state/reports"
+keep = 200
+keep_days = 400

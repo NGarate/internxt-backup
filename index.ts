@@ -7,6 +7,8 @@ import {
   RunFailureCode,
   toRunFailure,
 } from './src/runtime/run-failure';
+import { describeConfig, loadConfig } from './src/config/load';
+import { getStateDir } from './src/utils/state-dir';
 // Statically imported so the version is baked in at build time. Reading
 // package.json at runtime resolved against the process CWD, which meant the
 // installed binary threw on startup outside the project directory.
@@ -55,7 +57,7 @@ const COMMANDS = [
   {
     name: 'config',
     help: 'Validate and print the effective config',
-    implemented: false,
+    implemented: true,
   },
   {
     name: 'unlock',
@@ -122,6 +124,24 @@ function main(argv: string[]): void {
 
   if (!known) {
     throw createUsageError(`Unknown command: ${command}`);
+  }
+
+  if (command === 'config') {
+    // The state directory is only consulted as a fallback location, so a
+    // missing one must not stop `config --check` from reading an explicit
+    // path — which is exactly when you most want to run it.
+    let stateDir: string | undefined;
+    try {
+      stateDir = getStateDir();
+    } catch {
+      stateDir = undefined;
+    }
+    const { config, path } = loadConfig(
+      typeof values.config === 'string' ? values.config : undefined,
+      { stateDir },
+    );
+    console.log(describeConfig(config, path));
+    return;
   }
 
   if (!known.implemented) {
