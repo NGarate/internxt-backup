@@ -62,14 +62,15 @@ Honest state as of 2026-08-04. The pivot is in progress on `master`.
 - Failure taxonomy: 15 classes mapped to stable exit codes
 - Secret provider (env / command / prompt) with bounded retry, plus a redaction
   pass proven not to leak the live passphrase into reports or notifications
-- Docker image: pinned, SHA256-verified restic 0.19.1 and rclone 1.75.0, running
-  non-root, with startup guards for secret hygiene and config writability
+- Docker image builds and runs: pinned, SHA256-verified restic 0.19.1 and
+  rclone 1.75.0, non-root, with startup guards for secret hygiene and config
+  writability all verified against the real container (285 MB phase0 /
+  422 MB runtime)
 - Phase 0 transport-proof harness (T0–T9) with automatic pass/fail verdicts
 - 294 unit tests, 53 shell assertions, CI green
 
 **Not done**
 
-- The Docker image has not been built here — no daemon access in this workspace
 - **Phase 0 has never run against a live Internxt account.** Throughput, resume
   cost, restore fidelity and token lifetime are all unmeasured
 - Config layer, restic engine layer, run reports, scheduling, retention,

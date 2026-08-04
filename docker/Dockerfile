@@ -32,20 +32,26 @@
 # Internxt unattended when 2FA is enabled, because supplying a TOTP code has
 # no headless path (rclone#9529 is unmerged). Phase 0 measures the resulting
 # token lifetime and reports it; see docs/manual-testing.md for the options.
+#
+# NOTE the IB_ prefix on the build args. rclone maps RCLONE_<FLAG> environment
+# variables onto its own flags, and docker exports every ARG into the RUN
+# environment — so an ARG named RCLONE_VERSION is read as `--version=1.75.0`,
+# a boolean flag, and rclone aborts before doing anything. restic has the same
+# convention (RESTIC_REPOSITORY, RESTIC_PASSWORD, ...), so both are namespaced.
 # ---------------------------------------------------------------------------
 FROM debian:trixie-slim AS rclone-dl
-ARG RCLONE_VERSION=1.75.0
-ARG RCLONE_SHA256=aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
+ARG IB_RCLONE_VERSION=1.75.0
+ARG IB_RCLONE_SHA256=aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa
 ARG TARGETARCH=amd64
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl unzip; \
     rm -rf /var/lib/apt/lists/*; \
     cd /tmp; \
-    curl -fsSLO "https://downloads.rclone.org/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}.zip"; \
-    echo "${RCLONE_SHA256}  rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}.zip" | sha256sum -c -; \
-    unzip -q "rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}.zip"; \
-    install -m0755 "rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}/rclone" /usr/local/bin/rclone; \
+    curl -fsSLO "https://downloads.rclone.org/v${IB_RCLONE_VERSION}/rclone-v${IB_RCLONE_VERSION}-linux-${TARGETARCH}.zip"; \
+    echo "${IB_RCLONE_SHA256}  rclone-v${IB_RCLONE_VERSION}-linux-${TARGETARCH}.zip" | sha256sum -c -; \
+    unzip -q "rclone-v${IB_RCLONE_VERSION}-linux-${TARGETARCH}.zip"; \
+    install -m0755 "rclone-v${IB_RCLONE_VERSION}-linux-${TARGETARCH}/rclone" /usr/local/bin/rclone; \
     /usr/local/bin/rclone version; \
     # Fail the build if the internxt backend is missing. This is the whole
     # reason we pin >=1.73, and a silent regression here would not surface
@@ -56,18 +62,18 @@ RUN set -eux; \
 # 2. restic
 # ---------------------------------------------------------------------------
 FROM debian:trixie-slim AS restic-dl
-ARG RESTIC_VERSION=0.19.1
-ARG RESTIC_SHA256=f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
+ARG IB_RESTIC_VERSION=0.19.1
+ARG IB_RESTIC_SHA256=f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c
 ARG TARGETARCH=amd64
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl bzip2; \
     rm -rf /var/lib/apt/lists/*; \
     cd /tmp; \
-    curl -fsSLO "https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_${TARGETARCH}.bz2"; \
-    echo "${RESTIC_SHA256}  restic_${RESTIC_VERSION}_linux_${TARGETARCH}.bz2" | sha256sum -c -; \
-    bunzip2 "restic_${RESTIC_VERSION}_linux_${TARGETARCH}.bz2"; \
-    install -m0755 "restic_${RESTIC_VERSION}_linux_${TARGETARCH}" /usr/local/bin/restic; \
+    curl -fsSLO "https://github.com/restic/restic/releases/download/v${IB_RESTIC_VERSION}/restic_${IB_RESTIC_VERSION}_linux_${TARGETARCH}.bz2"; \
+    echo "${IB_RESTIC_SHA256}  restic_${IB_RESTIC_VERSION}_linux_${TARGETARCH}.bz2" | sha256sum -c -; \
+    bunzip2 "restic_${IB_RESTIC_VERSION}_linux_${TARGETARCH}.bz2"; \
+    install -m0755 "restic_${IB_RESTIC_VERSION}_linux_${TARGETARCH}" /usr/local/bin/restic; \
     /usr/local/bin/restic version
 
 # ---------------------------------------------------------------------------

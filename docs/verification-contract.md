@@ -75,7 +75,6 @@ pivot.
   harness exists ([phase0-runbook.md](./phase0-runbook.md)) but has not been
   run, so throughput, resume cost, restore fidelity, quota reclaim behaviour
   and token lifetime are all unmeasured. This gates every other claim
-- the Docker image has not been built; no daemon in the development workspace
 - no machine-readable run report is emitted yet, though the schema and the
   failure taxonomy both exist
 - the legacy Internxt-CLI engine is still present and is still the only code

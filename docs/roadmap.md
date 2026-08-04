@@ -38,7 +38,9 @@ afternoon.
 - `[x]` Build fails if `rclone help backends` lacks `internxt`
 - `[x]` Non-root, startup guards for secret hygiene and config writability
 - `[x]` 14 entrypoint assertions, no daemon required
-- `[ ]` **Built.** No docker group in the development workspace
+- `[x]` **Built.** Both targets build; Stage A and B verified in the real
+  container — non-root uid, both binaries, internxt backend present, and every
+  refusal path firing with exit 78
 - `[ ]` Survives a TOS reboot with `restart: always`
 
 ## Phase 0.75 — Seed first, build in parallel
