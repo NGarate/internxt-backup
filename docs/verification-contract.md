@@ -77,14 +77,17 @@ pivot.
   and token lifetime are all unmeasured. This gates every other claim
 - no machine-readable run report is emitted yet, though the schema and the
   failure taxonomy both exist
-- the legacy Internxt-CLI engine is still present and is still the only code
-  path that has ever transferred data
+- the supervisor has no data path yet. The legacy engine was deleted, and the
+  config, engine and ops layers that replace it are not built — so no code in
+  this repo currently transfers anything
 
 Resolved since the last revision:
 
 - coarse exit codes — a 15-class taxonomy with stable numbers now exists
-- `--resume` claiming more than it did — the bespoke uploader is being retired;
-  restic provides genuine resume, and Phase 0 T3 measures its actual cost
+- `--resume` claiming more than it did — the bespoke uploader is gone; restic
+  provides genuine resume, and Phase 0 T3 measures its actual cost
+- the container is unbuilt — both targets now build, with the startup guards
+  verified against real containers
 
 ## Definition of done
 
