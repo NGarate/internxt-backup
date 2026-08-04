@@ -1,163 +1,157 @@
-# internxt-backup Roadmap
+# Roadmap
 
-Updated: 2026-03-08
+Updated: 2026-08-04
 
-## Status Legend
+Status of the pivot from a bespoke Internxt-CLI uploader to a restic/rclone
+supervisor. See the [README](../README.md) for why.
 
-- `[x]` Completed
-- `[~]` Partially implemented
-- `[ ]` Not started
+Legend: `[x]` done · `[~]` partial · `[ ]` not started · 🚦 gate
 
-## Current Snapshot
+---
 
-The project is past the initial hardening stage and already has a strong local
-quality baseline:
+## Where this actually is
 
-- `[x]` Backup and restore flows implemented
-- `[x]` Strict backup failure semantics implemented
-- `[x]` Strict restore semantics with opt-out partial restore implemented
-- `[x]` Dry-run mode for backup and restore implemented
-- `[x]` State directory hardening and instance locking implemented
-- `[x]` SHA-256 checksums implemented
-- `[x]` Coverage gate enforced in Bun configuration
-- `[x]` High unit/behavior coverage in critical modules
-- `[ ]` Real E2E coverage against Internxt environment
+**Nothing has been proven against a live Internxt account yet.** Everything
+below that is marked done is done _locally_ — unit-tested, shell-tested, CI
+green. The transport itself is unmeasured.
 
-## Recently Completed
+That is the single most important fact about this project's status, and it is
+why Phase 0 exists and gates everything after it.
 
-### Backup/Restore correctness
+---
 
-- `[x]` Fail backup when uploads are incomplete
-- `[x]` Prevent baseline and manifest updates on failed backup runs
-- `[x]` Fail restore by default on download or checksum failures
-- `[x]` Allow opt-out partial restore with `--allow-partial-restore`
+## Phase 0 — Transport proof 🚦
 
-### Data safety and integrity
+- `[x]` T0–T9 harness with automatic pass/fail verdicts
+- `[x]` Verdict ledger, so the report is assembled from recorded facts
+- `[x]` Auth-expiry detection against the real rclone error strings
+- `[x]` JWT `exp` decoding, so token lifetime is a number rather than a guess
+- `[ ]` **Run it.** Needs the NAS, credentials, and a real 20–50 GB sample
 
-- `[x]` Atomic persistence for local state files
-- `[x]` Dedicated state directory under `~/.internxt-backup/`
-- `[x]` Owner-only permissions for state and lock files
-- `[x]` Optional HMAC manifest authenticity verification
-- `[x]` Path traversal protection for upload, delete sync, and restore paths
+Blocks: everything. If it fails, the fallback ladder is in
+[phase0-runbook.md](./phase0-runbook.md) and the cost of having tried is one
+afternoon.
 
-### Test and release baseline
+## Phase 0.5 — Container
 
-- `[x]` Strong behavior coverage for `internxt-service`
-- `[x]` Strong behavior coverage for `file-restore`
-- `[x]` Strong behavior coverage for `scheduler`
-- `[x]` Security regression tests for malformed state and traversal attempts
-- `[x]` Coverage gate enforced in Bun test config
+- `[x]` Multi-stage image, pinned + SHA256-verified restic and rclone
+- `[x]` Build fails if `rclone help backends` lacks `internxt`
+- `[x]` Non-root, startup guards for secret hygiene and config writability
+- `[x]` 14 entrypoint assertions, no daemon required
+- `[ ]` **Built.** No docker group in the development workspace
+- `[ ]` Survives a TOS reboot with `restart: always`
 
-## Active Priorities
+## Phase 0.75 — Seed first, build in parallel
 
-### 1) Transfer reliability
+- `[ ]` `docker/seed.sh` — real seed with raw restic, by subtree
+- `[ ]` Key generated and escrowed in two off-NAS locations **before** first byte
+- `[ ]` ~4 TB seeded and `restic check` clean
 
-- `[~]` Large-file retry state exists for `--resume`
-- `[ ]` Implement true chunk-level resumable uploads
-- `[ ]` Add configurable retry policy across upload, download, list, and delete
-- `[ ]` Add command execution timeouts with actionable errors
-- `[ ]` Detect and recover from auth expiry during long-running operations
+The dominant risk is the ~10-day unprotected window, not an imperfect
+supervisor. Seeding runs alongside Phases 1–3, not after them.
 
-Why this matters:
-Current `--resume` behavior persists local state, but retries still go through a
-whole-file upload path. That gap is the most important mismatch between the CLI
-surface and the actual implementation.
+## Phase 1 — Config layer
 
-### 2) Operational reporting and automation
+- `[ ]` `src/config/{schema,load,validate,paths}.ts`, `Bun.TOML.parse` at runtime
+- `[ ]` Unknown keys are errors; `min_files`/`min_bytes`/`max_shrink_pct` required
+- `[ ]` `internxt-backup config --check`
 
-- `[ ]` Return structured non-zero exit codes by failure class
-- `[ ]` Emit machine-readable per-run reports
-- `[ ]` Add explicit tamper-evidence reporting during restore
-- `[ ]` Add structured JSON logging mode for automation
+## Phase 2 — restic engine layer
 
-Why this matters:
-The tool is already usable interactively, but automation and incident handling
-still depend on parsing human-readable output.
+- `[ ]` Pure `args` / `env` / `events` / `exit-codes` modules
+- `[ ]` Injectable `SpawnFn`; parser hardened for split JSON, non-JSON stdout,
+  unknown `message_type`, capped error lists
 
-### 3) Restore and delete safety
+## Phase 3 — Run reports and exit codes
 
-- `[ ]` Add delete preview report for `--sync-deletes`
-- `[ ]` Add confirmation guard for destructive sync-delete runs
-- `[ ]` Add disk-space preflight checks for restore
-- `[ ]` Add explicit symlink policy with loop protection
-- `[ ]` Add interrupt-safe shutdown summary
+- `[x]` Failure taxonomy, 15 classes → stable exit codes
+- `[x]` Errors moved to stderr so stdout can carry machine-readable output
+- `[ ]` Schema bump to 1.1.0 (new modes, `skipped` status, 7 new codes, `engine`)
+- `[ ]` Reports emitted and validated against the schema in CI
 
-Why this matters:
-The current flows are safe by design in several places, but still need clearer
-operator safeguards for destructive or long-running jobs.
+## Phase 4 — Preflight, locking, scheduling
 
-### 4) Verification and release confidence
+- `[x]` PID lock (inherited, unchanged)
+- `[ ]` **Sanity band** — the guard that matters most. An unmounted share
+  produces a valid snapshot containing nothing, and retention then ages out the
+  good ones
+- `[ ]` Scheduler generalised from `syncFiles` to `ScheduledJob[]`
+- `[ ]` Cross-job mutex; `{protect:true}` only stops a job overlapping itself
 
-- `[ ]` Replace the integration placeholder with real integration/E2E coverage
-- `[ ]` Add failure-injection tests for auth expiry, partial writes, and CLI
-  errors
-- `[ ]` Add release-gating E2E checks before publishing binaries
-- `[ ]` Add multi-platform restore/backup smoke coverage in CI or pre-release
-  validation
+## Phase 5 — Backup and seeding
 
-Why this matters:
-The unit suite is strong, but the project still lacks proof that the full stack
-behaves correctly against a real Internxt environment.
+- `[ ]` Seed units with a persisted plan; must **adopt** the shell-seeded repo
+  rather than re-uploading 4 TB
 
-## Recommended Execution Order
+## Phase 6 — Verification
 
-### Milestone 1: Close the contract gaps
+- `[ ]` Rotating `check --read-data-subset`, cursor advancing only on success
+- `[ ]` Divisor sized from measured download rate (default 52 at this repo size)
 
-1. Define exit-code and run-report schema.
-2. Clarify the intended contract for `--resume`.
-3. Decide whether chunk resume is feasible with the current Internxt CLI.
+## Phase 7 — Secrets
 
-### Milestone 2: Harden the runtime
+- `[x]` Provider abstraction (env / command / prompt) with bounded retry
+- `[x]` `Secret` class — `toString`/`toJSON`/inspect all redact
+- `[x]` Redaction pass, proven against a realistic stderr blob
+- `[x]` Encrypted rclone config so token rotation persists
+- `[ ]` `recovery-card`, second restic key, escrow verification in `doctor`
 
-1. Implement retries/timeouts/auth recovery.
-2. Add delete preview and restore disk preflight checks.
-3. Add interrupt-safe run summaries.
+## Phase 8 — Retention, restore, drills
 
-### Milestone 3: Prove the system end-to-end
+- `[ ]` `forget`/`prune` decoupled, dry-run first, refuse >25% snapshot removal
+- `[ ]` Restore guards; quarterly canary drill
 
-1. Build a real Internxt-backed E2E harness.
-2. Add failure-injection coverage.
-3. Make release validation depend on those checks.
+## Phase 9 — Health, notify, CLI
 
-## Project Needs
+- `[ ]` Subcommand dispatch, `health` as the container healthcheck
+- `[ ]` Notification on failure / partial / verify-failed / no-recent-success
 
-The next phase requires a few explicit decisions:
+## Phase 10 — TOS 6 packaging
 
-- A stable failure taxonomy for exit codes and run reports
-- A product decision on whether `--resume` must mean true remote chunk resume
-  or only persisted retry state
-- A repeatable E2E environment, ideally with a disposable Internxt test account
-  and known fixture data
-- A decision on whether signed manifests should become mandatory in stricter
-  operating modes
+- `[x]` Compose with `restart: always`, sources `:ro`, resource limits
+- `[ ]` `docs/tos6-install.md` and the firmware-update survival checklist
 
-## Good To Haves
+## Phase 11 — Retire the legacy engine
 
-- `[ ]` Bandwidth throttling
-- `[ ]` Adaptive concurrency
-- `[ ]` Snapshot pruning helper command
-- `[ ]` Multiple include/exclude restore filters
-- `[ ]` Better daemon observability and failure summaries
-- `[ ]` Optional notifications on daemon failures
-- `[ ]` UX polish for large-job progress and summaries
+- `[ ]` Delete `src/core/upload/**`, `file-sync.ts`, `file-restore.ts` et al.
+- `[ ]` 0.5.0 with a `BREAKING CHANGE:` footer
 
-## Longer-Term Roadmap
+No data migration is needed: the Internxt account is empty and the old tool is
+protecting nothing.
 
-- `[ ]` Versioned snapshots and retention policies
-- `[ ]` Point-in-time restore selection
-- `[ ]` Immutable snapshot options
-- `[ ]` Multi-target backup
-- `[ ]` Config file support with environment overrides
-- `[ ]` Repair mode for inconsistent metadata
-- `[ ]` Stable CLI compatibility contract
+## Phase 12 — Tests
 
-## Production Exit Criteria
+- `[x]` 294 unit tests, 53 shell assertions, CI green
+- `[ ]` Real-restic integration against a local filesystem repo — highest value
+  per line, and the guard against upstream format drift
+- `[ ]` rclone-serve transport tests through a `type = local` remote
+- `[ ]` Coverage threshold 0.70 → 0.85
 
-The project should be considered production-ready only when all are true:
+## Phase 13 — Documentation
 
-1. True runtime behavior matches the documented CLI contract.
-2. E2E coverage validates backup and restore against a real Internxt
-   environment.
-3. Error codes and machine-readable run reports are stable and documented.
-4. Restore and delete safety controls are in place for destructive scenarios.
-5. Release builds are blocked unless validation succeeds.
+- `[x]` README, security model, manual testing, Phase 0 runbook
+- `[ ]` configuration, operations, troubleshooting, tuning
+- `[ ]` **disaster-recovery.md** — the runbook for when the NAS is gone,
+  drafted from the real T5 transcript and proven by an off-NAS restore
+- `[ ]` Executable docs: CI runs `<!-- verify -->` blocks; `--help` matched
+  against `operations.md`
+
+---
+
+## Production exit criteria
+
+All must hold:
+
+1. Phase 0 passed against the real account, with the evidence retained
+2. ~4 TB seeded, `restic check` clean
+3. One successful nightly incremental, one passing verify shard, one passing
+   drill
+4. `health` green, and proven to go red when backups stop
+5. Recovery card printed, two keys escrowed off-NAS, and
+   `disaster-recovery.md` followed successfully on a machine that is not the NAS
+6. Legacy engine retired
+
+## Archived
+
+Pre-pivot planning in [archive/](./archive/). Kept for history; the premises no
+longer hold.

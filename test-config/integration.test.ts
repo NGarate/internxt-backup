@@ -9,7 +9,7 @@
  * - `docs/verification-contract.md`
  * - `docs/live-e2e-harness.md`
  * - `docs/run-report.schema.json`
- * - `docs/verifiable-backlog.md`
+ * - `docs/roadmap.md` (pivot phases and real status)
  *
  * The following areas are already covered by unit or behavior tests:
  * - `uploader.test.ts` tests the core file upload functionality

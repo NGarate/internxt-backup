@@ -1,329 +1,212 @@
-# Internxt Backup
+# internxt-backup
 
 [![CI](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml/badge.svg)](https://github.com/ngarate/internxt-backup/actions/workflows/ci.yml)
 [![Build Release Assets](https://github.com/ngarate/internxt-backup/actions/workflows/build-release-assets.yml/badge.svg)](https://github.com/ngarate/internxt-backup/releases)
 
-CLI tool for backing up and restoring files with Internxt Drive through the
-official Internxt CLI.
+Encrypted, deduplicated, resumable backups from a TerraMaster TOS 6 NAS to
+Internxt Drive.
 
-## Project Status
+> **Status: mid-pivot, not production-ready.** The transport has not yet been
+> proven against a live Internxt account. [What works today](#status).
 
-As of 2026-03-08, the repository is in a healthy development state:
+---
 
-- Backup and restore flows are implemented and covered by automated tests.
-- Differential backups, full baselines, strict restore behavior, dry-run mode,
-  remote delete sync, manifest signing, and instance locking are implemented.
-- Local validation currently passes: lint, format, typecheck, tests, coverage,
-  and build.
-- The main remaining gaps are true chunk-level resume, real E2E coverage
-  against Internxt, structured run/error reporting, and a more complete
-  retry/timeout strategy.
+## What this is
 
-Current local validation snapshot:
+A supervisor. It does not move your bytes — [restic][restic] does that, over
+[rclone][rclone]'s native Internxt backend.
 
-- `248` tests passing
-- `92.58%` line coverage from `bun test --coverage`
-- `bun run build` passes
-
-## What The Tool Does
-
-- Backs up a local directory to Internxt Drive
-- Tracks a full baseline manifest for differential backups
-- Restores files back to a local directory with optional checksum verification
-- Supports scheduled daemon runs through cron expressions
-- Uses SHA-256 checksums for local change detection and restore verification
-- Stores local state in `~/.internxt-backup/` with owner-only permissions
-- Prevents concurrent backup/restore runs with a lock file
-
-## Current Capabilities
-
-- Internxt CLI readiness checks before work starts
-- Differential backup from the last saved full baseline
-- Explicit full backup mode with manifest refresh
-- Remote delete sync via `--sync-deletes`
-- Strict restore failure semantics by default
-- Optional partial restore with `--allow-partial-restore`
-- Optional dry-run for backup and restore
-- Parallel uploads and downloads
-- Progress tracking and summaries
-- Optional HMAC signature verification for manifests
-- Path traversal protection in upload, delete sync, and restore flows
-
-## Known Limitations
-
-- `--resume` is only partial today:
-  state is persisted for large uploads, but the current implementation still
-  retries the whole file through the Internxt CLI rather than resuming real
-  remote chunks.
-- There is no real integration/E2E suite against a live Internxt environment
-  yet. The project currently relies on strong unit and behavior coverage.
-- Exit codes are still coarse-grained and there is no machine-readable run
-  report yet.
-- Retry/timeout/auth-expiry handling is still uneven across operations.
-- Restore safety still lacks disk-space preflight checks and an explicit
-  symlink policy.
-
-See [docs/roadmap.md](docs/roadmap.md) for the prioritized roadmap and
-[docs/project-review-action-plan.md](docs/project-review-action-plan.md) for
-the execution plan.
-
-## Requirements
-
-- [Bun](https://bun.sh/) `>= 1.3.9`
-- [Internxt CLI](https://github.com/internxt/cli) installed and authenticated
-
-## Installation
-
-### 1. Install Internxt CLI
-
-```bash
-npm install -g @internxt/cli
-internxt login
+```
+NAS shares (:ro)
+  └─ internxt-backup     config, scheduling, locking, preflight sanity,
+                         run reports, exit-code taxonomy, retention,
+                         verification rotation, restore drills, alerting
+      └─ restic          AES-256 under YOUR key, dedup, snapshots, real
+                         resume, point-in-time restore, check --read-data
+          └─ rclone      native internxt backend (upstream since v1.73)
+              └─ Internxt Drive
 ```
 
-### 2. Install Internxt Backup
+**Why not just call the Internxt CLI?** That is what this project used to do,
+and it could not be made reliable. The CLI has no resume ([#475][i475]), OOMs on
+large files from non-streaming encryption ([#342][i342]), no checksum support
+([#313][i313]), and a 40 GB per-file cap. It also produced a mirror rather than
+a backup — no snapshots, so a deletion or ransomware propagated to the only
+copy.
+
+More fundamentally, the Internxt backend exposes **no hashes and no usable
+modtimes**, so any sync-style comparison degrades to size-only. From Internxt's
+own tracker ([#553][i553], closed out-of-scope): _"If content changes while size
+stays the same, the file will never be copied or synched... you cannot trust
+internxt as a backup system."_
+
+restic's content-addressed, append-only repository format is structurally immune
+to that. Pack names derive from content, nothing is ever overwritten, and restic
+verifies its own SHA-256 over every blob — there is no comparison to get wrong.
+
+[restic]: https://restic.net
+[rclone]: https://rclone.org/internxt/
+[i475]: https://github.com/internxt/cli/issues/475
+[i342]: https://github.com/internxt/cli/issues/342
+[i313]: https://github.com/internxt/cli/issues/313
+[i553]: https://github.com/internxt/cli/issues/553
+
+---
+
+## Status
+
+Honest state as of 2026-08-04. The pivot is in progress on `master`.
+
+**Working and tested**
+
+- Failure taxonomy: 15 classes mapped to stable exit codes
+- Secret provider (env / command / prompt) with bounded retry, plus a redaction
+  pass proven not to leak the live passphrase into reports or notifications
+- Docker image: pinned, SHA256-verified restic 0.19.1 and rclone 1.75.0, running
+  non-root, with startup guards for secret hygiene and config writability
+- Phase 0 transport-proof harness (T0–T9) with automatic pass/fail verdicts
+- 294 unit tests, 53 shell assertions, CI green
+
+**Not done**
+
+- The Docker image has not been built here — no daemon access in this workspace
+- **Phase 0 has never run against a live Internxt account.** Throughput, resume
+  cost, restore fidelity and token lifetime are all unmeasured
+- Config layer, restic engine layer, run reports, scheduling, retention,
+  verification rotation, restore drills, alerting — designed, not built
+- The legacy Internxt-CLI engine is still present and is still the only code
+  path that has ever moved a byte. It is retired once the new one is proven
+
+**Known constraint:** with 2FA enabled, the first login needs one interactive
+code. After that rclone refreshes its own token indefinitely, provided its
+config stays writable. See [How login works](#how-login-works).
+
+---
+
+## Quick start
+
+Requires Docker on the NAS. Full detail in [docs/manual-testing.md][mt].
 
 ```bash
-bun install -g internxt-backup
+# 1. build
+docker build -f docker/Dockerfile --target phase0 -t internxt-backup:phase0 .
+
+# 2. smoke test — no credentials needed
+docker run --rm --entrypoint sh internxt-backup:phase0 -c \
+  'id; rclone version | head -1; restic version; rclone help backends | grep -w internxt'
+
+# 3. authenticate once (the only step needing a 2FA code)
+read -rs CFGPASS
+docker compose -f docker/docker-compose.phase0.yml up -d
+docker compose -f docker/docker-compose.phase0.yml exec -it \
+  -e RCLONE_CONFIG_PASS="$CFGPASS" phase0 /phase0/bootstrap-auth.sh
+
+# 4. prove the transport before trusting it with 4 TB
+read -rs RESTIC_KEY
+docker compose -f docker/docker-compose.phase0.yml exec \
+  -e RESTIC_PASSWORD="$RESTIC_KEY" -e RCLONE_CONFIG_PASS="$CFGPASS" \
+  phase0 /phase0/phase0.sh all
 ```
 
-## Usage
+> 🔴 **Escrow the restic passphrase before step 4.** It lives nowhere on the
+> machine, so an un-escrowed repository is unrecoverable from the moment it is
+> created. See [Escrow][sec-escrow].
 
-### Backup
+[mt]: docs/manual-testing.md
+[sec-escrow]: docs/security.md#escrow--the-highest-severity-requirement
 
-```bash
-internxt-backup /path/to/source --target=/Backups/Folder
+---
+
+## How login works
+
+Worth understanding, because it determines whether you ever see a 2FA prompt
+again. From `backend/internxt/auth.go` in the v1.75.0 release:
+
+```
+reAuthorize()              on HTTP 401 from the server
+  refreshOrReLogin()
+    refreshJWTToken()      RefreshToken endpoint. NO 2FA code.
+                           persists the rotated JWT via oauthutil.PutToken
+    on 401 only: reLogin() full login. This one needs a code.
 ```
 
-Backup options:
+Refreshing never needs 2FA — **but only if rclone can write the rotated token
+back.** `PutToken` writes to the rclone config, so an unwritable or `/dev/null`
+config discards every refresh and forces the re-login path. This project made
+exactly that mistake before reading the source.
 
-- `--source=<path>`: source directory to back up; can also be positional
-- `--target=<path>`: remote Internxt folder; defaults to `/`
-- `--cores=<number>`: upload concurrency; defaults to about two thirds of CPU
-  cores
-- `--schedule=<cron>`: cron expression for daemon mode
-- `--daemon`: keep running and execute backups on the configured schedule
-- `--force`: ignore hash cache and mark all scanned files as changed
-- `--full`: create a fresh full baseline and upload all scanned files
-- `--sync-deletes`: delete remote files removed locally since the saved
-  baseline
-- `--resume`: enable large-file state persistence and retry flow
-- `--chunk-size=<mb>`: chunk size metadata for large-file retry state;
-  defaults to `50`
-- `--dry-run`: preview uploads and remote deletions without modifying Internxt
-- `--quiet`: reduce output to the minimum
-- `--verbose`: include per-file operations and debug-level logs
-- `--help`, `-h`: show help
-- `--version`, `-v`: show version
+Hence: a real config file, **encrypted at rest**, with `RCLONE_CONFIG_PASS` from
+the environment. Ciphertext on disk, key in memory. The container refuses to
+start if that config is plaintext, or if its directory is unwritable.
 
-### Restore
+The restic passphrase stays environment-only, which is not a contradiction — it
+is the secret whose disclosure exposes backup contents and whose loss is
+unrecoverable, and it never needs to be written. [Full reasoning][sec].
 
-```bash
-internxt-backup restore --source=/Backups/Folder --target=/path/to/restore
-```
+**Caveat:** [rclone#9584][i9584] — routine operations discard the rotated token,
+so it ages from _issue_ rather than last use and is renewed reactively on a 401.
+Fine while backups run nightly; the nightly job is the keepalive. A long idle
+stretch can age it past the refresh window, needing another bootstrap.
+[PR #9588][p9588] fixes it upstream; this project uses released versions only
+and does not carry patches.
 
-Restore options:
+[sec]: docs/security.md
+[i9584]: https://github.com/rclone/rclone/issues/9584
+[p9588]: https://github.com/rclone/rclone/pull/9588
 
-- `--source=<path>`: remote source path in Internxt Drive
-- `--target=<path>`: local target directory
-- `--pattern=<glob>`: filter restored files by filename pattern
-- `--path=<subdir>`: restore only a specific path prefix from the remote tree
-- `--cores=<number>`: download concurrency
-- `--no-verify`: skip checksum verification after download
-- `--allow-partial-restore`: continue even if some downloads or checksums fail
-- `--dry-run`: preview selected files without writing to disk
-- `--quiet`: reduce output to the minimum
-- `--verbose`: include detailed restore logs
+---
 
-## Examples
+## Options and trade-offs
 
-```bash
-# Basic backup
-internxt-backup /mnt/disk/Photos --target=/Backups/Photos
+Decisions this project has made, and what each costs.
 
-# Create a new full baseline
-internxt-backup /mnt/disk/Photos --target=/Backups/Photos --full
+| Decision                            | Why                                                                                                           | Cost                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **restic, not a bespoke uploader**  | real resume, dedup, snapshots, verifiable integrity                                                           | one more binary; the data path is no longer ours to debug                       |
+| **Released versions only**          | an open PR can be force-pushed, rebased or abandoned; pinning a SHA does not make it supported                | unattended TOTP unavailable until it merges upstream                            |
+| **`--pack-size 128`**               | Internxt charges ~25–33 s of metadata per object; at 16 MiB the seed is metadata-bound and roughly 80% slower | 768 MiB of `TMPDIR`; a killed run loses up to one in-flight pack per connection |
+| **Backend kept pluggable**          | if Phase 0 fails, swapping to B2/Storj costs one config line, not a rewrite                                   | a little indirection                                                            |
+| **append-only for backups**         | ransomware on the NAS cannot delete the backup through the nightly path                                       | prune needs a separate, guarded profile                                         |
+| **Encrypted rclone config on disk** | token rotation needs a writable config; without it 2FA returns at every expiry                                | one more passphrase to manage                                                   |
+| **Rotating `check --read-data`**    | a full pass is a 4 TB download                                                                                | full coverage takes a year at the default divisor                               |
 
-# Sync local deletions to remote
-internxt-backup /mnt/disk/Photos --target=/Backups/Photos --sync-deletes
+If Phase 0 fails, the fallbacks in order are: swap the backend to B2 / Storj /
+Hetzner (supervisor, config, reports and tests unchanged); use Internxt as a
+secondary `restic copy` target; `rclone crypt` + `rclone sync`, which keeps
+encryption and chunked resume but loses dedup, snapshots and point-in-time
+restore; or abort the pivot. Phase 0 exists to make that decision cheap.
 
-# Preview a backup without changing remote state
-internxt-backup /mnt/disk/Photos --target=/Backups/Photos --dry-run
+---
 
-# Scheduled backup daemon
-internxt-backup /mnt/disk/Data --target=/Backups/Data --schedule="0 2 * * *" --daemon
+## Documentation
 
-# Restore a full tree
-internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored
+|                                                           |                                                                                         |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [manual-testing.md][mt]                                   | Ordered testing stages with expected output and a troubleshooting table                 |
+| [security.md][sec]                                        | Threat model, the three secrets, delivery tiers, escrow, and what it does _not_ protect |
+| [phase0-runbook.md](docs/phase0-runbook.md)               | The transport proof: what each test proves, and the fallbacks if it fails               |
+| [verification-contract.md](docs/verification-contract.md) | What must be proven before a change counts as done                                      |
+| [run-report.schema.json](docs/run-report.schema.json)     | Machine-readable per-run report format                                                  |
+| [cli-ux-best-practices.md](docs/cli-ux-best-practices.md) | Reference the CLI is being built against                                                |
 
-# Restore only JPEG files
-internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --pattern="*.jpg"
-
-# Preview restore selection
-internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --dry-run
-```
-
-## How Backup Works
-
-1. The CLI verifies that the Internxt CLI is installed and authenticated.
-2. The source directory is scanned and each file gets a SHA-256 checksum.
-3. If a full baseline already exists, only files changed since that baseline are
-   selected unless `--force` or `--full` is used.
-4. If `--sync-deletes` is enabled, files deleted locally since the saved
-   baseline are removed remotely after safe path validation.
-5. Successful runs persist a new baseline locally and upload the manifest to the
-   target directory.
-
-Important behavior:
-
-- Backups fail when uploads are incomplete.
-- Baseline and manifest updates are not committed after failed upload runs.
-- Dry-run mode never uploads, deletes, or updates baseline state.
-
-## How Restore Works
-
-1. The CLI validates Internxt availability and authentication.
-2. The remote tree is listed recursively from the selected source path.
-3. The backup manifest is downloaded when present.
-4. Remote files are filtered by `--pattern` and `--path`.
-5. Unsafe restore paths are rejected before download.
-6. Downloads are verified against the manifest by default.
-7. Restore fails on download or checksum errors unless
-   `--allow-partial-restore` is set.
-
-## State, Security, and Integrity
-
-- Local state lives under `~/.internxt-backup/`
-- State directory permissions are hardened to `0o700`
-- State and cache files are written atomically
-- Lock file permissions are restricted to `0o600`
-- File integrity uses SHA-256 checksums
-- Optional manifest signing is enabled by setting
-  `INTERNXT_BACKUP_MANIFEST_HMAC_KEY`
-
-## CI/CD and Release Flow
-
-This project uses GitHub Actions and semantic-release.
-
-- `CI` runs lint, formatting, typecheck, audit, and `bun test --coverage`
-- Bun enforces a minimum line coverage threshold of `70%` through
-  `bunfig.toml`
-- `create-release-metadata.yml` runs semantic-release on `master`
-- `build-release-assets.yml` builds release binaries after a successful release
-
-Trigger a release manually:
-
-```bash
-gh workflow run create-release-metadata.yml --ref master
-```
-
-Or use the guarded helper:
-
-```bash
-bun run release:trigger
-```
+---
 
 ## Development
 
-### Setup
-
 ```bash
-git clone https://github.com/ngarate/internxt-backup.git
-cd internxt-backup
 bun install
+bun run check           # lint, format, typecheck, unit tests, shell tests
+bun run verify:release  # + coverage threshold + build
+bun run test:shell      # entrypoint guards and Phase 0 helpers, no daemon needed
 ```
 
-### Verification Commands
+Requires Bun ≥ 1.3.9. Commits follow [Conventional Commits][cc];
+`semantic-release` derives versions from them. Work lands directly on `master`.
 
-```bash
-bun run lint
-bun run format
-bun run typecheck
-bun test
-bun test --coverage
-bun run build
-```
+[cc]: https://www.conventionalcommits.org/
 
-One-shot local gate:
-
-```bash
-bun run check
-```
-
-### Project Structure
-
-```text
-.
-├── index.ts
-├── src/
-│   ├── file-sync.ts
-│   ├── file-restore.ts
-│   ├── core/
-│   │   ├── backup/
-│   │   ├── download/
-│   │   ├── internxt/
-│   │   ├── scheduler/
-│   │   └── upload/
-│   ├── interfaces/
-│   └── utils/
-├── test-config/
-├── docs/
-└── .github/workflows/
-```
-
-## Next Steps
-
-The recommended execution order for the next phase is:
-
-1. Implement real chunk-level resume or narrow the CLI contract so `--resume`
-   describes the current whole-file retry behavior honestly.
-2. Add structured exit codes and machine-readable run reports.
-3. Build a real integration/E2E harness against Internxt.
-4. Harden retries, timeouts, and auth-expiry recovery across all operations.
-5. Add restore safety controls: symlink policy, disk-space preflight, and
-   better delete safeguards.
-
-## Troubleshooting
-
-### Internxt CLI Not Found
-
-```bash
-npm install -g @internxt/cli
-internxt --version
-internxt login
-```
-
-### Global Installation Issues
-
-```bash
-# Install from a clone
-git clone https://github.com/ngarate/internxt-backup.git
-cd internxt-backup
-bun install -g .
-```
-
-```bash
-# Or run without global install
-bunx internxt-backup --help
-```
-
-### Daemon Usage On NAS/Server Hosts
-
-```bash
-internxt-backup /mnt/disk/Share --target=/NAS-Backup --daemon --schedule="0 3 * * *"
-```
-
-## Migration From WebDAV
-
-This project started as a WebDAV backup tool and is now Internxt-only.
-
-To migrate old scripts:
-
-1. Install and authenticate the Internxt CLI.
-2. Replace the old binary name with `internxt-backup`.
-3. Replace WebDAV endpoint configuration with `--target=/Remote/Path`.
-4. Remove WebDAV-only flags and assumptions.
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

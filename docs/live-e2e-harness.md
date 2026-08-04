@@ -1,130 +1,82 @@
-# internxt-backup Live E2E Harness Contract
+# Live E2E harness contract
 
-Updated: 2026-03-23
+Updated: 2026-08-04 — retargeted from the Internxt-CLI engine to restic/rclone.
 
-This contract defines the minimum acceptable live validation flow for replacing
-the current placeholder integration test.
+What a run against a real Internxt account must prove, and the guardrails it
+must respect.
 
-## Non-negotiable guardrails
+The concrete, runnable form of this is **Phase 0** —
+[phase0-runbook.md](./phase0-runbook.md) and `docker/phase0/phase0.sh`. This
+document is the contract that harness satisfies, kept separate so the
+requirements survive changes to the implementation.
 
-- Use a disposable Internxt account or disposable remote folder tree.
-- Never run delete-sync or restore against real user data.
-- Never commit credentials, account identifiers, or remote folder UUIDs.
-- Keep local state isolated from the operator's real `~/.internxt-backup/`.
+---
 
-## Required environment
+## Guardrails
 
-- Bun `>= 1.3.9`
-- Internxt CLI installed and already authenticated
-- a writable temp workspace with at least:
-  - source fixture directory
-  - restore target directory
-  - isolated HOME or state dir for the test run
+Non-negotiable, and enforced in code where possible.
 
-Recommended variables:
+- **Disposable target only.** `phase0.sh` refuses to run unless the repository
+  path contains `phase0`, `test` or `scratch`, because the suite runs
+  `forget --prune` and deliberately fails authentication in T9.
+- **Never against real user data.** Sources are mounted `:ro`; the restore
+  target is a scratch directory.
+- **No credentials committed.** Not the restic passphrase, not the config
+  passphrase, not the account email, not remote folder UUIDs. Leakage into the
+  verdict ledger is covered by a test.
+- **Isolated state.** A dedicated state directory, not the operator's own.
 
-```bash
-export INTERNXT_E2E_SOURCE=/tmp/internxt-backup-e2e/source
-export INTERNXT_E2E_RESTORE=/tmp/internxt-backup-e2e/restore
-export INTERNXT_E2E_REMOTE_ROOT=/CodexE2E/internxt-backup
-export HOME=/tmp/internxt-backup-e2e/home
-```
+---
 
-## Fixture dataset
+## What a run must prove
 
-Create a small deterministic fixture set before the run:
+Mapping to the Phase 0 tests that implement it:
 
-- `docs/readme.txt` small text file
-- `photos/example.jpg` binary fixture
-- `nested/path/data.json` structured JSON fixture
-- one file that will be mutated between run 1 and run 2
+| Requirement                                                             | Test | Gate                         |
+| ----------------------------------------------------------------------- | ---- | ---------------------------- |
+| The backend exists and the account is entitled                          | T0   | hard                         |
+| The config is writable, so rotated tokens persist                       | T0   | hard                         |
+| A repository can be created and read back                               | T1   | **hard — abort on failure**  |
+| Sustained throughput on **real** data, plus the compression/dedup ratio | T2   | ≥3 MB/s                      |
+| An interrupted backup resumes without re-uploading everything           | T3   | <25% re-upload               |
+| Stored data verifies byte-for-byte from the remote                      | T4   | **hard — abort on failure**  |
+| A restore is byte-identical, by `diff -r` **and** sha256 manifests      | T5   | **hard — abort on failure**  |
+| Deleting actually reclaims quota, or lands in trash                     | T6   | design-determining           |
+| Concurrent runs are serialised by the repository lock                   | T7   | exit 11                      |
+| Backups work under `--append-only` and prune is refused                 | T8   | validates the security model |
+| Failure classes map to the documented exit codes                        | T9   | 10 / 12 / 3                  |
 
-The fixture must be simple enough to diff manually and stable enough to reuse
-across runs.
+**T2 must use a real slice of the actual dataset**, not synthetic data.
+Synthetic data measures the link and lies about the compression ratio, which is
+the number that projects final repository size.
 
-## Required live sequence
+**T4 is not optional hygiene.** rclone's Internxt backend supports no hashes and
+cannot set modtimes, so it never checksum-verifies an upload. One hundred
+percent of the integrity guarantee is restic's content addressing plus
+`check --read-data`.
 
-### Phase 1. Fresh full backup
+---
 
-Run:
+## Evidence
 
-```bash
-internxt-backup "$INTERNXT_E2E_SOURCE" --target="$INTERNXT_E2E_REMOTE_ROOT" --full
-```
+Per [verification-contract.md](./verification-contract.md), a live run is only
+complete with:
 
-Prove:
+- `phase0-report.md` — the verdict table and the gate decision, generated from
+  `verdicts.ndjson` so it reflects recorded facts rather than recollection
+- the raw `*.ndjson` streams, quota snapshots and sha256 manifests
+- a note confirming the target was disposable
 
-- command exits zero
-- remote tree is created
-- manifest upload succeeds
-- run report captures uploaded file count
+Copy the NDJSON into `test-fixtures/restic/`. The parser tests run against
+**real** restic output rather than output invented from the docs — including
+the awkward cases a live run produces naturally: a stream truncated mid-line by
+SIGKILL, and rclone warnings interleaved with JSON. Both have already broken
+the report parser once.
 
-### Phase 2. Differential backup
+---
 
-Mutate one fixture file and add one new file, then run:
+## Release gating
 
-```bash
-internxt-backup "$INTERNXT_E2E_SOURCE" --target="$INTERNXT_E2E_REMOTE_ROOT"
-```
-
-Prove:
-
-- only changed files are uploaded
-- unchanged files are skipped
-- baseline refresh behavior matches the contract
-
-### Phase 3. Dry-run backup
-
-Run:
-
-```bash
-internxt-backup "$INTERNXT_E2E_SOURCE" --target="$INTERNXT_E2E_REMOTE_ROOT" --dry-run
-```
-
-Prove:
-
-- command exits zero
-- no remote mutation occurs
-- the summary states what would change
-
-### Phase 4. Verified restore
-
-Run:
-
-```bash
-internxt-backup restore --source="$INTERNXT_E2E_REMOTE_ROOT" --target="$INTERNXT_E2E_RESTORE"
-```
-
-Prove:
-
-- command exits zero
-- restored tree matches the source fixture
-- checksum verification is active and reported
-
-### Phase 5. Negative-path smoke
-
-At minimum, prove one of:
-
-- missing Internxt CLI
-- unauthenticated Internxt session
-- provider-side upload/download failure
-
-The failure must produce a stable run report and a predictable exit code class.
-
-## Release-blocking evidence
-
-The harness is release-ready only when it produces all of the following:
-
-- terminal transcript or CI log
-- per-run JSON artifact matching `docs/run-report.schema.json`
-- fixture manifest or checksum snapshot
-- restore comparison proof
-- note confirming the remote target was disposable
-
-## Completion criteria
-
-The placeholder integration test can be replaced only when:
-
-1. this sequence is automated or mechanically repeatable
-2. each phase has artifact-backed proof
-3. release docs point to the harness as a required pre-release gate
+No release may claim the restic data path works until a live run has passed and
+its evidence is retained. Until then the README's status section says so
+plainly. That is the honest position, not a temporary embarrassment.

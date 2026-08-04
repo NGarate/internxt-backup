@@ -68,13 +68,24 @@ its outcome:
 
 ## Current blocked areas
 
-These are known gaps, not implied pass conditions:
+Known gaps, not implied pass conditions. Updated 2026-08-04 for the restic
+pivot.
 
-- there is still no real Internxt-backed E2E harness in-repo
-- there is still no emitted machine-readable run report in the CLI runtime
-- exit codes are still coarse-grained and largely collapse to `1`
-- `--resume` still documents persisted retry state rather than true remote chunk
-  resume
+- **Nothing has been proven against a live Internxt account.** The Phase 0
+  harness exists ([phase0-runbook.md](./phase0-runbook.md)) but has not been
+  run, so throughput, resume cost, restore fidelity, quota reclaim behaviour
+  and token lifetime are all unmeasured. This gates every other claim
+- the Docker image has not been built; no daemon in the development workspace
+- no machine-readable run report is emitted yet, though the schema and the
+  failure taxonomy both exist
+- the legacy Internxt-CLI engine is still present and is still the only code
+  path that has ever transferred data
+
+Resolved since the last revision:
+
+- coarse exit codes — a 15-class taxonomy with stable numbers now exists
+- `--resume` claiming more than it did — the bespoke uploader is being retired;
+  restic provides genuine resume, and Phase 0 T3 measures its actual cost
 
 ## Definition of done
 
