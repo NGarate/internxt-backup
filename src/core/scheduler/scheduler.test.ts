@@ -1,5 +1,6 @@
-import { describe, it, expect, mock } from 'bun:test';
-import { createScheduler, BackupConfig } from './scheduler';
+import { describe, it, expect } from 'bun:test';
+import { createScheduler, type ScheduledJob } from './scheduler';
+import { RunFailureCode } from '../../runtime/run-failure';
 
 class FakeCron {
   static instances: FakeCron[] = [];
@@ -30,173 +31,279 @@ class FakeCron {
   stop() {
     this.stopped = true;
   }
-
   nextRun() {
     return new Date('2026-01-01T00:00:00Z');
   }
-
   previousRun() {
     return null;
   }
-
   isRunning() {
     return false;
   }
 }
 
-const defaultConfig: BackupConfig = {
-  sourceDir: '/photos',
-  schedule: '0 2 * * *',
-  syncOptions: { target: '/Backups' },
-};
+/**
+ * Builds a scheduler whose keepAlive resolves immediately, so startDaemon
+ * returns instead of parking forever. Captures the signal handlers so the
+ * shutdown path can be driven explicitly.
+ */
+function harness(overrides: Record<string, unknown> = {}) {
+  FakeCron.instances = [];
+  const handlers: Partial<Record<string, () => void>> = {};
+  const exited: number[] = [];
 
-describe('createScheduler', () => {
-  it('should reject invalid cron expressions', async () => {
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
+  const scheduler = createScheduler({
+    verbosity: 0,
+    cronConstructor: FakeCron as never,
+    nowFn: () => 1_000,
+    nowDateFn: () => new Date('2026-01-01T00:00:00Z'),
+    registerSignalHandler: (signal, handler) => {
+      handlers[signal] = handler;
+      return () => {
+        delete handlers[signal];
+      };
+    },
+    setIntervalFn: ((fn: () => void) => {
+      queueMicrotask(() => handlers.SIGTERM?.());
+      void fn;
+      return 0 as unknown as ReturnType<typeof setInterval>;
+    }) as never,
+    clearIntervalFn: (() => {}) as never,
+    exitFn: (code: number) => {
+      exited.push(code);
+    },
+    ...overrides,
+  });
+
+  return { scheduler, handlers, exited };
+}
+
+/**
+ * Only the instances that were actually registered as jobs.
+ * validateCronExpression constructs throwaway crons to test an expression,
+ * and those land in FakeCron.instances too — they are never scheduled and
+ * never stopped, so assertions must exclude them.
+ */
+const realJobs = () => FakeCron.instances.filter((c) => c.options?.name);
+
+const job = (
+  id: string,
+  run: ScheduledJob['run'],
+  extra: Partial<ScheduledJob> = {},
+): ScheduledJob => ({ id, expression: '0 2 * * *', run, ...extra });
+
+describe('scheduler / validation', () => {
+  it('rejects an empty job list rather than idling silently', async () => {
+    const { scheduler } = harness();
+    await expect(scheduler.startDaemon([])).rejects.toMatchObject({
+      failureCode: RunFailureCode.UsageError,
+      exitCode: 2,
     });
+  });
+
+  it('validates every expression before running any job', async () => {
+    const { scheduler } = harness();
+    const ran: string[] = [];
 
     await expect(
-      scheduler.startDaemon({
-        ...defaultConfig,
-        schedule: 'not-a-cron',
+      scheduler.startDaemon([
+        job(
+          'good',
+          async () => {
+            ran.push('good');
+          },
+          { runOnStart: true },
+        ),
+        job(
+          'bad',
+          async () => {
+            ran.push('bad');
+          },
+          { expression: 'not-a-cron' },
+        ),
+      ]),
+    ).rejects.toMatchObject({ failureCode: RunFailureCode.UsageError });
+
+    // The point: a typo in the second job must not let the first one run and
+    // leave the daemon half-started.
+    expect(ran).toEqual([]);
+  });
+
+  it('names the offending job in the error', async () => {
+    const { scheduler } = harness();
+    try {
+      await scheduler.startDaemon([
+        job('nightly-prune', async () => {}, { expression: '* *' }),
+      ]);
+      throw new Error('should have thrown');
+    } catch (error) {
+      expect((error as Error).message).toContain('nightly-prune');
+    }
+  });
+});
+
+describe('scheduler / execution', () => {
+  it('runs runOnStart jobs before scheduling', async () => {
+    const { scheduler } = harness();
+    const ran: string[] = [];
+
+    await scheduler.startDaemon([
+      job(
+        'seed',
+        async () => {
+          ran.push('seed');
+        },
+        { runOnStart: true },
+      ),
+      job('later', async () => {
+        ran.push('later');
       }),
-    ).rejects.toThrow('Invalid cron expression');
+    ]);
+
+    expect(ran).toEqual(['seed']);
+    expect(realJobs().map((c) => c.options?.name)).toEqual(['seed', 'later']);
   });
 
-  it('should run one backup and log completion via runOnce', async () => {
-    const syncFilesFn = mock(() => Promise.resolve());
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      syncFilesFn,
-      nowFn: () => 1000,
-    });
-
-    await scheduler.runOnce(defaultConfig);
-
-    expect(syncFilesFn).toHaveBeenCalledWith('/photos', { target: '/Backups' });
+  it('registers every job with protect enabled', async () => {
+    const { scheduler } = harness();
+    await scheduler.startDaemon([
+      job('a', async () => {}),
+      job('b', async () => {}),
+    ]);
+    expect(realJobs()).toHaveLength(2);
+    for (const instance of realJobs()) {
+      expect(instance.options?.protect).toBe(true);
+    }
   });
 
-  it('should throw when runOnce sync fails', async () => {
-    const syncFilesFn = mock(() => Promise.reject(new Error('disk full')));
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      syncFilesFn,
-      nowFn: () => 1000,
-    });
+  it('serialises different jobs against each other', async () => {
+    // croner's protect only stops a job overlapping itself. backup, prune and
+    // verify all contend for the same repository lock, so the daemon needs a
+    // mutex across jobs — this is what proves it.
+    const { scheduler } = harness();
+    const order: string[] = [];
+    let releaseFirst: (() => void) | undefined;
 
-    await expect(scheduler.runOnce(defaultConfig)).rejects.toThrow('disk full');
-  });
-
-  it('should run initial backup, schedule cron with overlap protection, and shutdown on signal', async () => {
-    FakeCron.instances = [];
-    const syncFilesFn = mock(() => Promise.resolve());
-    const signalHandlers: Partial<Record<'SIGINT' | 'SIGTERM', () => void>> =
-      {};
-    const clearIntervalFn = mock(
-      (_timer: ReturnType<typeof setInterval>) => {},
+    const first = scheduler.runOnce(
+      job('first', async () => {
+        order.push('first:start');
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+        order.push('first:end');
+      }),
     );
-    const exitFn = mock((_code: number) => {});
 
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      syncFilesFn,
-      nowFn: () => 1735689600000,
-      nowDateFn: () => new Date('2026-01-01T00:00:00Z'),
-      registerSignalHandler: (signal, handler) => {
-        signalHandlers[signal] = handler;
-        return () => {
-          delete signalHandlers[signal];
-        };
-      },
-      setIntervalFn: (() => 12345) as any,
-      clearIntervalFn: clearIntervalFn as any,
-      exitFn,
-    });
+    const second = scheduler.runOnce(
+      job('second', async () => {
+        order.push('second:start');
+      }),
+    );
 
-    const daemonPromise = scheduler.startDaemon(defaultConfig);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+    expect(order).toEqual(['first:start']); // second must not have begun
 
-    expect(syncFilesFn).toHaveBeenCalledTimes(1);
-    const scheduledJob = FakeCron.instances.find((j) => Boolean(j.callback));
-    expect(scheduledJob).toBeDefined();
-    expect(scheduledJob?.options).toMatchObject({ protect: true });
+    releaseFirst?.();
+    await Promise.all([first, second]);
 
-    signalHandlers.SIGTERM?.();
-    await daemonPromise;
-
-    expect(clearIntervalFn).toHaveBeenCalled();
-    expect(exitFn).toHaveBeenCalledWith(0);
+    expect(order).toEqual(['first:start', 'first:end', 'second:start']);
   });
 
-  it('should execute scheduled callback through cron job', async () => {
-    FakeCron.instances = [];
-    let callCount = 0;
-    const syncFilesFn = mock(async () => {
-      callCount++;
-      if (callCount === 2) {
-        throw new Error('scheduled failure');
-      }
-    });
-    const signalHandlers: Partial<Record<'SIGINT' | 'SIGTERM', () => void>> =
-      {};
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      syncFilesFn,
-      registerSignalHandler: (signal, handler) => {
-        signalHandlers[signal] = handler;
-        return () => {
-          delete signalHandlers[signal];
-        };
-      },
-      setIntervalFn: (() => 12345) as any,
-      clearIntervalFn: (() => {}) as any,
-      exitFn: () => {},
-    });
+  it('keeps the chain intact when a job throws', async () => {
+    const { scheduler } = harness();
+    const order: string[] = [];
 
-    const daemonPromise = scheduler.startDaemon(defaultConfig);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(
+      scheduler.runOnce(
+        job('boom', async () => {
+          order.push('boom');
+          throw new Error('job failed');
+        }),
+      ),
+    ).rejects.toThrow('job failed');
 
-    const scheduledJob = FakeCron.instances.find((j) => Boolean(j.callback));
-    expect(scheduledJob).toBeDefined();
+    await scheduler.runOnce(
+      job('after', async () => {
+        order.push('after');
+      }),
+    );
 
-    await scheduledJob!.callback!();
-    expect(syncFilesFn).toHaveBeenCalledTimes(2);
-
-    signalHandlers.SIGINT?.();
-    await daemonPromise;
+    expect(order).toEqual(['boom', 'after']);
   });
 
-  it('should stop jobs and report job info', () => {
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      registerSignalHandler: () => () => {},
-      setIntervalFn: (() => 12345) as any,
-      clearIntervalFn: (() => {}) as any,
-      exitFn: () => {},
-    });
+  it('does not take the daemon down when a scheduled job fails', async () => {
+    const { scheduler } = harness();
+    await scheduler.startDaemon([
+      job('flaky', async () => {
+        throw new Error('nope');
+      }),
+    ]);
 
-    expect(scheduler.stopJob('missing')).toBe(false);
+    const fire = realJobs()[0]?.callback;
+    expect(fire).toBeDefined();
+    await expect(fire!()).resolves.toBeUndefined();
+  });
+
+  it('passes an abort signal that is unaborted while running', async () => {
+    const { scheduler } = harness();
+    let seen: boolean | undefined;
+    await scheduler.runOnce(
+      job('check-signal', async (signal) => {
+        seen = signal.aborted;
+      }),
+    );
+    expect(seen).toBe(false);
+  });
+});
+
+describe('scheduler / shutdown', () => {
+  it('stops all jobs and exits 0 on SIGTERM', async () => {
+    const { scheduler, exited } = harness();
+    await scheduler.startDaemon([
+      job('a', async () => {}),
+      job('b', async () => {}),
+    ]);
+
+    expect(realJobs().every((c) => c.stopped)).toBe(true);
+    expect(exited).toEqual([0]);
+  });
+
+  it('ignores a repeated shutdown', async () => {
+    const { scheduler, handlers, exited } = harness();
+    await scheduler.startDaemon([job('a', async () => {})]);
+    handlers.SIGINT?.();
+    handlers.SIGTERM?.();
+    expect(exited).toEqual([0]);
+  });
+});
+
+describe('scheduler / job control', () => {
+  it('stops a single job by id', async () => {
+    const { scheduler } = harness();
+    await scheduler.startDaemon([
+      job('keep', async () => {}),
+      job('drop', async () => {}),
+    ]);
+
+    // startDaemon shut down at the end of the harness run, so both are gone.
+    expect(scheduler.stopJob('drop')).toBe(false);
+  });
+
+  it('reports job info while running', async () => {
+    const { scheduler } = harness({
+      setIntervalFn: (() => 0) as never, // never shut down
+    });
+    void scheduler.startDaemon([job('a', async () => {})]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const info = scheduler.getJobInfo();
+    expect(info).toHaveLength(1);
+    expect(info[0]?.id).toBe('a');
+    expect(info[0]?.nextRun).toEqual(new Date('2026-01-01T00:00:00Z'));
+    expect(info[0]?.running).toBe(false);
+
+    expect(scheduler.stopJob('a')).toBe(true);
     expect(scheduler.getJobInfo()).toEqual([]);
-  });
-
-  it('should delay before running backup in runDelayed', async () => {
-    const syncFilesFn = mock(() => Promise.resolve());
-    const scheduler = createScheduler({
-      verbosity: 0,
-      cronConstructor: FakeCron as any,
-      syncFilesFn,
-    });
-
-    const start = Date.now();
-    await scheduler.runDelayed(defaultConfig, 25);
-    expect(Date.now() - start).toBeGreaterThanOrEqual(20);
-    expect(syncFilesFn).toHaveBeenCalledTimes(1);
   });
 });

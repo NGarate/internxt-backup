@@ -113,11 +113,17 @@ supervisor. Seeding runs alongside Phases 1–3, not after them.
 
 ## Phase 11 — Retire the legacy engine
 
-- `[ ]` Delete `src/core/upload/**`, `file-sync.ts`, `file-restore.ts` et al.
+- `[x]` Deleted `core/upload/**`, `core/internxt/**`, `core/backup/**`,
+  `core/download/**`, `file-scanner.ts`, `file-sync.ts`, `file-restore.ts`,
+  `interfaces/`, `fs-utils.ts`, `test-config/`
+- `[x]` Scheduler decoupled from the engine, generalised to `ScheduledJob[]`
+- `[x]` `index.ts` rewritten as subcommand dispatch; unbuilt commands exit 2
 - `[ ]` 0.5.0 with a `BREAKING CHANGE:` footer
 
-No data migration is needed: the Internxt account is empty and the old tool is
-protecting nothing.
+Done early rather than last. The plan originally held this until after the
+seed, on the reasoning that the old tool was the only backup during it — but
+the Internxt account is empty, so it was protecting nothing and there was
+nothing to migrate. Git history is the only record needed.
 
 ## Phase 12 — Tests
 

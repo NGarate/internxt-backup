@@ -1,16 +1,18 @@
 {
   "name": "internxt-backup",
   "version": "0.4.0",
-  "description": "A simple, fast, and efficient tool for backing up files to Internxt Drive",
+  "description": "Encrypted, deduplicated, resumable backups from a TerraMaster NAS to Internxt Drive, supervising restic over rclone",
   "keywords": [
     "backup",
     "cli",
-    "cloud-storage",
+    "deduplication",
     "encryption",
-    "file-sync",
-    "file-transfer",
     "internxt",
-    "upload"
+    "nas",
+    "rclone",
+    "restic",
+    "snapshots",
+    "terramaster"
   ],
   "license": "MIT",
   "author": "ngarate",
@@ -20,6 +22,7 @@
   "files": [
     "index.ts",
     "src/**/*.ts",
+    "docker/",
     "dist/",
     "LICENSE",
     "README.md"

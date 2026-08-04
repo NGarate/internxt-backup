@@ -3,12 +3,12 @@
 telemetry = false
 
 [test]
-# Configure preload scripts for tests
-preload = ["./test-config/setup.ts"]
-# Enforce coverage threshold natively in Bun
+# Enforce coverage threshold natively in Bun.
+#
+# Only lines is gated. The remaining code is overwhelmingly pure functions, so
+# this rises to 0.85 once the engine and config layers land — see
+# docs/roadmap.md, Phase 12.
 coverageThreshold = { lines = 0.7, functions = 0, statements = 0, branches = 0 }
-# Exclude test scaffolding from coverage calculations (glob patterns)
-coveragePathIgnorePatterns = ["**/test-config/**"]
 
 [install]
 # Using text lockfile instead of binary for better version control compatibility

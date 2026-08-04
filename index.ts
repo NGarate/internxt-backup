@@ -1,10 +1,7 @@
 #!/usr/bin/env bun
 
 import { parseArgs } from 'node:util';
-import { syncFiles, SyncOptions } from './src/file-sync';
-import { restoreFiles } from './src/file-restore';
-import { createScheduler } from './src/core/scheduler/scheduler';
-import { bold, blue, red } from './src/utils/logger';
+import { bold, blue, dim, red, yellow } from './src/utils/logger';
 import {
   createUsageError,
   RunFailureCode,
@@ -12,212 +9,146 @@ import {
 } from './src/runtime/run-failure';
 // Statically imported so the version is baked in at build time. Reading
 // package.json at runtime resolved against the process CWD, which meant the
-// installed binary threw on startup outside the project directory, or
-// reported an unrelated project's version.
+// installed binary threw on startup outside the project directory.
 import { version } from './package.json';
 
 const VERSION = version || 'unknown';
 
-function parseBackupArgs(args: string[]) {
-  const { values, positionals } = parseArgs({
-    args,
-    options: {
-      source: { type: 'string' },
-      target: { type: 'string' },
-      cores: { type: 'string' },
-      schedule: { type: 'string' },
-      daemon: { type: 'boolean' },
-      force: { type: 'boolean' },
-      full: { type: 'boolean' },
-      'sync-deletes': { type: 'boolean' },
-      resume: { type: 'boolean' },
-      'chunk-size': { type: 'string' },
-      'dry-run': { type: 'boolean' },
-      quiet: { type: 'boolean' },
-      verbose: { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' },
-      version: { type: 'boolean', short: 'v' },
-    },
-    allowPositionals: true,
-  });
+/**
+ * Commands the supervisor will expose.
+ *
+ * `implemented: false` entries exist so `--help` describes the real surface
+ * rather than growing organically, and so running one gives a precise answer
+ * instead of "unknown command". They exit 2, not 0 — a scheduler that treats
+ * an unbuilt command as success is worse than one that fails.
+ */
+const COMMANDS = [
+  { name: 'version', help: 'Print the version', implemented: true },
+  { name: 'help', help: 'Show this help', implemented: true },
+  { name: 'daemon', help: 'Run all scheduled jobs', implemented: false },
+  { name: 'backup', help: 'Run a backup now', implemented: false },
+  { name: 'seed', help: 'Plan or run the initial seed', implemented: false },
+  { name: 'restore', help: 'Restore from a snapshot', implemented: false },
+  { name: 'snapshots', help: 'List snapshots', implemented: false },
+  {
+    name: 'verify',
+    help: 'Structural and read-data checks',
+    implemented: false,
+  },
+  { name: 'forget', help: 'Apply the retention policy', implemented: false },
+  {
+    name: 'prune',
+    help: 'Reclaim space (destructive, guarded)',
+    implemented: false,
+  },
+  { name: 'drill', help: 'Restore a canary and verify it', implemented: false },
+  {
+    name: 'health',
+    help: 'Report whether backups are current',
+    implemented: false,
+  },
+  {
+    name: 'doctor',
+    help: 'Check environment, permissions, escrow',
+    implemented: false,
+  },
+  {
+    name: 'config',
+    help: 'Validate and print the effective config',
+    implemented: false,
+  },
+  {
+    name: 'unlock',
+    help: 'Supply the repository passphrase',
+    implemented: false,
+  },
+] as const;
 
-  return {
-    ...values,
-    sourceDir: positionals[0] || values.source,
-  };
-}
-
-function parseRestoreArgs(args: string[]) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      source: { type: 'string' },
-      target: { type: 'string' },
-      pattern: { type: 'string' },
-      path: { type: 'string' },
-      cores: { type: 'string' },
-      quiet: { type: 'boolean' },
-      verbose: { type: 'boolean' },
-      'no-verify': { type: 'boolean' },
-      'allow-partial-restore': { type: 'boolean' },
-      'dry-run': { type: 'boolean' },
-      help: { type: 'boolean', short: 'h' },
-    },
-    allowPositionals: true,
-  });
-
-  return values;
-}
-
-function showHelp() {
+function showHelp(): void {
+  const width = Math.max(...COMMANDS.map((c) => c.name.length));
   console.log(`
-${bold(`Internxt Backup v${VERSION} - A simple CLI for backing up files to Internxt Drive`)}
+${bold(`internxt-backup v${VERSION}`)} — encrypted, deduplicated backups to Internxt Drive
 
-${bold(`Usage: internxt-backup <source-dir> [options]`)}
-${bold(`       internxt-backup restore [options]`)}
+${bold('Usage:')} internxt-backup <command> [options]
 
-${bold('Backup Options:')}
-  --source=<path>         Source directory to backup (can also be positional)
-  --target=<path>         Target folder in Internxt Drive (default: root)
-  --cores=<number>        Number of concurrent uploads (default: 2/3 of CPU cores)
-  --schedule=<cron>       Cron expression for scheduled backups (e.g., "0 2 * * *")
-  --daemon                Run as a daemon with scheduled backups
-  --force                 Force upload all files regardless of hash cache
-  --full                  Create a full backup baseline (for differential backups)
-  --sync-deletes          Delete remote files that were deleted locally
-  --resume                Enable resume capability for large files
-  --chunk-size=<mb>       Chunk size in MB for large files (default: 50)
-  --dry-run               Preview changes without uploading or deleting remote files
-  --quiet                 Show minimal output (only errors and progress)
-  --verbose               Show detailed output including per-file operations
-  --help, -h              Show this help message
-  --version, -v           Show version information
+${bold('Commands:')}
+${COMMANDS.map((c) => {
+  const pad = c.name.padEnd(width);
+  const note = c.implemented ? '' : dim('  (not yet implemented)');
+  return `  ${pad}  ${c.help}${note}`;
+}).join('\n')}
 
-${bold('Restore Options:')}
-  --source=<path>         Remote path in Internxt Drive to restore from (required)
-  --target=<path>         Local directory to restore files to (required)
-  --pattern=<glob>        Filter files by glob pattern (e.g., "*.jpg", "*.{jpg,png}")
-  --path=<subdir>         Restore only a specific subdirectory
-  --cores=<number>        Number of concurrent downloads (default: 2/3 of CPU cores)
-  --no-verify             Skip checksum verification after download
-  --allow-partial-restore Continue restore even if some files fail or checksums mismatch
-  --dry-run               Preview restore selection without writing local files
-  --quiet                 Show minimal output
-  --verbose               Show detailed output
+${bold('Global options:')}
+  -h, --help       Show this help
+  -v, --version    Print the version
+      --config     Path to config.toml
 
-${bold('Backup Examples:')}
-  internxt-backup /mnt/disk/Photos --target=/Backups/Photos
-  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --full
-  internxt-backup /mnt/disk/Photos --target=/Backups/Photos --sync-deletes
-  internxt-backup /mnt/disk/Important --target=/Backups --schedule="0 2 * * *" --daemon
+${yellow('This project is mid-pivot.')} The data path is moving to restic over
+rclone's native Internxt backend. Commands marked above are designed but not
+built; see docs/roadmap.md for the real status and docs/architecture.md for how
+the pieces fit.
 
-${bold('Restore Examples:')}
-  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored
-  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --pattern="*.jpg"
-  internxt-backup restore --source=/Backups/Photos --target=/mnt/disk/Restored --path="2024/"
+${blue('Transport proof:')} the restic path has not yet been validated against a
+live Internxt account. Run docker/phase0/phase0.sh before trusting it with data
+— see docs/phase0-runbook.md.
 `);
 }
 
-function showVersion() {
-  console.log(`internxt-backup v${VERSION}`);
+function main(argv: string[]): void {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    options: {
+      help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' },
+      config: { type: 'string' },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  const command = positionals[0];
+
+  if (values.version || command === 'version') {
+    console.log(`internxt-backup v${VERSION}`);
+    return;
+  }
+
+  if (values.help || command === 'help' || !command) {
+    showHelp();
+    return;
+  }
+
+  const known = COMMANDS.find((c) => c.name === command);
+
+  if (!known) {
+    throw createUsageError(`Unknown command: ${command}`);
+  }
+
+  if (!known.implemented) {
+    throw createUsageError(
+      `'${command}' is not implemented yet.\n` +
+        `The restic engine layer is still being built — see docs/roadmap.md.\n` +
+        `For now, use docker/phase0/phase0.sh to validate the transport.`,
+    );
+  }
 }
 
 function handleFatalError(error: unknown): never {
   const failure = toRunFailure(error);
   console.error(red(`Error: ${failure.message}`));
-
   if (failure.failureCode === RunFailureCode.UsageError) {
     console.log();
     showHelp();
   }
-
   process.exit(failure.exitCode);
 }
 
-async function main() {
-  const rawArgs = Bun.argv.slice(2);
-
-  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
-    showHelp();
-    process.exit(0);
-  }
-
-  if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
-    showVersion();
-    process.exit(0);
-  }
-
-  if (rawArgs.length === 0) {
-    showHelp();
-    process.exit(0);
-  }
-
-  const isRestore = rawArgs[0] === 'restore';
-
-  if (isRestore) {
-    const args = parseRestoreArgs(rawArgs.slice(1));
-
-    if (args.help) {
-      showHelp();
-      process.exit(0);
-    }
-
-    if (!args.source) {
-      throw createUsageError('--source is required for restore');
-    }
-
-    if (!args.target) {
-      throw createUsageError('--target is required for restore');
-    }
-
-    await restoreFiles({
-      source: args.source,
-      target: args.target,
-      pattern: args.pattern,
-      path: args.path,
-      cores: args.cores ? parseInt(args.cores) : undefined,
-      quiet: args.quiet,
-      verbose: args.verbose,
-      verify: !args['no-verify'],
-      allowPartialRestore: args['allow-partial-restore'],
-      dryRun: args['dry-run'],
-    });
-    return;
-  }
-
-  const args = parseBackupArgs(rawArgs);
-
-  if (!args.sourceDir) {
-    throw createUsageError('Source directory is required');
-  }
-
-  const syncOptions: SyncOptions = {
-    cores: args.cores ? parseInt(args.cores) : undefined,
-    target: args.target,
-    quiet: args.quiet,
-    verbose: args.verbose,
-    force: args.force,
-    full: args.full,
-    syncDeletes: args['sync-deletes'],
-    resume: args.resume,
-    chunkSize: args['chunk-size'] ? parseInt(args['chunk-size']) : undefined,
-    dryRun: args['dry-run'],
-  };
-
-  if (args.daemon && args.schedule) {
-    console.log(blue(`Starting daemon mode with schedule: ${args.schedule}`));
-    const scheduler = createScheduler();
-    await scheduler.startDaemon({
-      sourceDir: args.sourceDir,
-      schedule: args.schedule,
-      syncOptions,
-    });
-    return;
-  }
-
-  await syncFiles(args.sourceDir, syncOptions);
-}
-
 if (import.meta.main) {
-  main().catch(handleFatalError);
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    handleFatalError(error);
+  }
 }
+
+export { COMMANDS, main, showHelp };

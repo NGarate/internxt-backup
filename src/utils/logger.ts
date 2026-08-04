@@ -9,6 +9,7 @@ const colors = {
   yellow: '\x1b[33m',
   red: '\x1b[31m',
   bold: '\x1b[1m',
+  dim: '\x1b[2m',
   reset: '\x1b[0m',
 };
 
@@ -23,6 +24,8 @@ export const blue = (text: string): string =>
   `${colors.blue}${text}${colors.reset}`;
 export const bold = (text: string): string =>
   `${colors.bold}${text}${colors.reset}`;
+export const dim = (text: string): string =>
+  `${colors.dim}${text}${colors.reset}`;
 
 // Duplicate message tracking
 const recentMessages = new Set<string>();

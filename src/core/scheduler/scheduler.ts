@@ -1,6 +1,6 @@
 import { Cron } from 'croner';
 import * as logger from '../../utils/logger';
-import { syncFiles, SyncOptions } from '../../file-sync';
+import { RunFailure, RunFailureCode } from '../../runtime/run-failure';
 
 type SignalName = 'SIGINT' | 'SIGTERM';
 
@@ -17,16 +17,28 @@ type CronConstructor = new (
   callback?: () => void | Promise<void>,
 ) => CronJob;
 
-export interface BackupConfig {
-  sourceDir: string;
-  schedule: string;
-  syncOptions: SyncOptions;
+/**
+ * One scheduled unit of work.
+ *
+ * The scheduler knows nothing about backups. It starts jobs on a cron
+ * expression, keeps them from overlapping, and shuts down cleanly — that is
+ * the whole contract. Whether a job runs restic, prunes, verifies or drills a
+ * restore is the caller's business.
+ */
+export interface ScheduledJob {
+  /** Stable identifier, used in logs and by stopJob(). */
+  id: string;
+  /** Cron expression. Validated before the daemon starts. */
+  expression: string;
+  /** Runs on schedule. Should honour the abort signal for a clean stop. */
+  run: (signal: AbortSignal) => Promise<void>;
+  /** Run once at daemon start, before the first scheduled firing. */
+  runOnStart?: boolean;
 }
 
 export interface SchedulerOptions {
   verbosity?: number;
   cronConstructor?: CronConstructor;
-  syncFilesFn?: typeof syncFiles;
   nowFn?: () => number;
   nowDateFn?: () => Date;
   registerSignalHandler?: (
@@ -42,7 +54,6 @@ export function createScheduler(options: SchedulerOptions = {}) {
   const verbosity = options.verbosity ?? logger.Verbosity.Normal;
   const CronImpl =
     options.cronConstructor ?? (Cron as unknown as CronConstructor);
-  const runSync = options.syncFilesFn ?? syncFiles;
   const now = options.nowFn ?? (() => Date.now());
   const nowDate = options.nowDateFn ?? (() => new Date());
   const registerSignalHandler =
@@ -58,6 +69,22 @@ export function createScheduler(options: SchedulerOptions = {}) {
   const exitFn = options.exitFn ?? ((code: number) => process.exit(code));
 
   const jobs = new Map<string, CronJob>();
+  const controller = new AbortController();
+
+  /**
+   * croner's `protect` stops a job overlapping *itself*. It does not stop two
+   * different jobs colliding — and backup, prune and verify all contend for
+   * the same repository lock. This serialises across every job in the daemon.
+   */
+  let chain: Promise<void> = Promise.resolve();
+  const exclusive = <T>(fn: () => Promise<T>): Promise<T> => {
+    const result = chain.then(fn, fn);
+    chain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
 
   const validateCronExpression = (expression: string): boolean => {
     try {
@@ -68,18 +95,17 @@ export function createScheduler(options: SchedulerOptions = {}) {
     }
   };
 
-  const runOnce = async (config: BackupConfig): Promise<void> => {
+  const runOnce = async (job: ScheduledJob): Promise<void> => {
     const startTime = now();
-
     try {
-      logger.info(`Starting backup from ${config.sourceDir}`, verbosity);
-      await runSync(config.sourceDir, config.syncOptions);
+      logger.info(`Starting job: ${job.id}`, verbosity);
+      await exclusive(() => job.run(controller.signal));
       const duration = ((now() - startTime) / 1000).toFixed(1);
-      logger.success(`Backup completed in ${duration}s`, verbosity);
+      logger.success(`Job ${job.id} completed in ${duration}s`, verbosity);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      logger.error(`Backup failed: ${errorMessage}`);
+      logger.error(`Job ${job.id} failed: ${errorMessage}`);
       throw error;
     }
   };
@@ -97,6 +123,9 @@ export function createScheduler(options: SchedulerOptions = {}) {
         }
         stopped = true;
         logger.info('\nShutting down daemon...', verbosity);
+        // Signals in-flight work to wind up rather than being killed, so a
+        // running restic gets the clean SIGINT path instead of a hard stop.
+        controller.abort();
         stopAll();
         stopSigint();
         stopSigterm();
@@ -113,47 +142,59 @@ export function createScheduler(options: SchedulerOptions = {}) {
     });
   };
 
-  const startDaemon = async (config: BackupConfig): Promise<void> => {
-    if (!validateCronExpression(config.schedule)) {
-      throw new Error(`Invalid cron expression: ${config.schedule}`);
+  const startDaemon = async (scheduled: ScheduledJob[]): Promise<void> => {
+    if (scheduled.length === 0) {
+      throw new RunFailure(
+        RunFailureCode.UsageError,
+        'No jobs configured; the daemon would do nothing',
+      );
     }
 
-    logger.info(
-      `Starting backup daemon with schedule: ${config.schedule}`,
-      verbosity,
-    );
-    logger.info(`Source: ${config.sourceDir}`, verbosity);
-    logger.info(`Target: ${config.syncOptions.target || '/'}`, verbosity);
-
-    logger.info('Running initial backup...', verbosity);
-    await runOnce(config);
-
-    const jobId = `${config.sourceDir}-${now()}`;
-
-    const job = new CronImpl(
-      config.schedule,
-      { name: jobId, protect: true },
-      async () => {
-        logger.info(
-          `Scheduled backup triggered at ${nowDate().toISOString()}`,
-          verbosity,
+    // Validate every expression before running anything, so a typo in the
+    // fourth job does not surface only after the first three have run.
+    for (const job of scheduled) {
+      if (!validateCronExpression(job.expression)) {
+        throw new RunFailure(
+          RunFailureCode.UsageError,
+          `Invalid cron expression for job '${job.id}': ${job.expression}`,
         );
-        try {
-          await runOnce(config);
-          logger.info('Scheduled backup completed successfully', verbosity);
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          logger.error(`Scheduled backup failed: ${errorMessage}`);
-        }
-      },
-    );
+      }
+    }
 
-    jobs.set(jobId, job);
-    logger.success(
-      `Daemon started. Next run: ${job.nextRun()?.toISOString() || 'unknown'}`,
-      verbosity,
-    );
+    for (const job of scheduled) {
+      logger.info(`Scheduling ${job.id}: ${job.expression}`, verbosity);
+    }
+
+    for (const job of scheduled) {
+      if (job.runOnStart) {
+        await runOnce(job);
+      }
+    }
+
+    for (const job of scheduled) {
+      const cron = new CronImpl(
+        job.expression,
+        { name: job.id, protect: true },
+        async () => {
+          logger.info(
+            `Triggered ${job.id} at ${nowDate().toISOString()}`,
+            verbosity,
+          );
+          try {
+            await runOnce(job);
+          } catch {
+            // Already logged by runOnce. Swallowed deliberately: one failing
+            // job must not take the daemon down with it.
+          }
+        },
+      );
+
+      jobs.set(job.id, cron);
+      logger.success(
+        `${job.id} scheduled. Next run: ${cron.nextRun()?.toISOString() || 'unknown'}`,
+        verbosity,
+      );
+    }
 
     await keepAlive();
   };
@@ -191,16 +232,7 @@ export function createScheduler(options: SchedulerOptions = {}) {
     }));
   };
 
-  const runDelayed = async (
-    config: BackupConfig,
-    delayMs: number,
-  ): Promise<void> => {
-    logger.info(`Scheduling backup in ${delayMs}ms`, verbosity);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    await runOnce(config);
-  };
-
-  return { startDaemon, runOnce, stopJob, stopAll, getJobInfo, runDelayed };
+  return { startDaemon, runOnce, stopJob, stopAll, getJobInfo };
 }
 
 export type BackupScheduler = ReturnType<typeof createScheduler>;

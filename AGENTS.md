@@ -4,142 +4,152 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**internxt-backup** is a CLI tool for backing up files to Internxt Drive via the Internxt CLI. It handles parallel uploads, resumable transfers, hash-based change detection, and cron-scheduled backups.
+**internxt-backup** is a _supervisor_ for backing up a TerraMaster TOS 6 NAS to
+Internxt Drive. It does not move bytes itself: restic owns the data path,
+rclone's native `internxt` backend owns transport.
+
+It previously shelled out to the Internxt CLI once per file. That engine was
+deleted — see [README.md](README.md) for why, and
+[docs/architecture.md](docs/architecture.md) for what replaced it.
 
 - **Runtime:** Bun (>=1.3.9), ESM modules
 - **Language:** TypeScript (strict mode)
 - **Path alias:** `#src/*` maps to `./src/*`
+- **Status:** mid-pivot. The transport has never been proven against a live
+  account — [docs/roadmap.md](docs/roadmap.md) has the honest checkboxes.
 
 ## Commands
 
 ```bash
-# Install dependencies
 bun install
 
-# Run all tests
-bun test
-
-# Run a single test file
-bun test src/core/upload/uploader.test.ts
-
-# Run tests with coverage
+bun test                       # unit tests
+bun test src/secrets/          # a single directory or file
 bun test --coverage
+bun run test:shell             # docker/**.test.sh — no daemon needed
 
-# Type check
-bun run typecheck
-
-# Lint (oxlint, config in .oxlintrc.json)
-bun run lint
-
-# Lint with auto-fix
+bun run typecheck              # tsc --noEmit
+bun run lint                   # oxlint, config in .oxlintrc.json
 bun run lint:fix
+bun run format                 # oxfmt --check, config in .oxfmtrc.json
+bun run format:fix
+bun run fix                    # lint:fix + format:fix
 
-# Format (oxfmt, Prettier-like config in .oxfmtrc.json)
-bun run format
-
-# Build for distribution
 bun run build
-
-# Run CLI during development
 bun index.ts --help
-bun index.ts /path/to/source --target=/Backups
 ```
 
 ## Architecture
 
-**Entry flow:** `index.ts` (CLI arg parsing) → `src/file-sync.ts` (orchestrator) → core services
+```
+NAS shares (:ro) -> internxt-backup -> restic -> rclone :internxt: -> Internxt
+```
 
-The orchestrator (`file-sync.ts`) checks Internxt CLI installation/auth, creates a `FileScanner` and `Uploader`, scans the source directory, then uploads changed files. In daemon mode, `BackupScheduler` wraps this in a cron loop.
+**Entry flow:** `index.ts` (subcommand dispatch) -> ops -> engine -> restic.
 
-**Core services** (`src/core/`):
+The legacy engine (`file-sync.ts`, `file-restore.ts`, `core/upload/**`,
+`core/internxt/**`, `core/backup/**`, `core/download/**`, `core/file-scanner.ts`,
+`interfaces/`, `utils/fs-utils.ts`, `test-config/`) was **deleted** in the
+pivot. Git history has it. Do not reintroduce those patterns — in particular
+the per-file shell-out, the whole-file "resumable" uploader, or the
+baseline-manifest change detection.
 
-- `internxt/internxt-service.ts` — wraps Internxt CLI commands (upload, mkdir, list-files) via shell exec
-- `file-scanner.ts` — scans directories, calculates SHA-256 checksums, detects changes against cached state
-- `backup/backup-state.ts` — baseline snapshot, differential selection, deletion detection, HMAC-signed manifest
-- `upload/uploader.ts` — upload orchestrator that coordinates the services below
-- `upload/upload-pool.ts` — thin wrapper over `core/pool/work-pool.ts`
-- `upload/hash-cache.ts` — persists file hashes to `~/.internxt-backup/internxt-backup-hash-cache.json`
-- `upload/resumable-uploader.ts` — **whole-file retry with persisted state, NOT chunk resume.** `uploadedChunks` is never populated; each attempt re-uploads the entire file. The Internxt CLI exposes no chunk API.
-- `upload/progress-tracker.ts` — tracks and displays upload progress
-- `download/downloader.ts` — parallel restore downloads with checksum verification
-- `scheduler/scheduler.ts` — cron scheduling via croner, prevents overlapping executions
-- `pool/work-pool.ts` — generic concurrency pool, returns per-item results and never rejects
+**Present today** (`src/`):
 
-**Runtime** (`src/runtime/`): `run-failure.ts` — `RunFailureCode` taxonomy and stable exit codes. Throw `RunFailure` rather than bare `Error` so failures map to a documented exit code.
+- `core/scheduler/scheduler.ts` — croner daemon over `ScheduledJob[]`. Knows
+  nothing about backups. `{protect:true}` stops a job overlapping itself; an
+  in-process mutex serialises _different_ jobs, which matters because backup,
+  prune and verify all contend for the same restic repository lock
+- `core/pool/work-pool.ts` — generic concurrency pool, per-item results, never
+  rejects
+- `runtime/run-failure.ts` — `RunFailureCode` taxonomy and stable exit codes.
+  Throw `RunFailure`, not bare `Error`, so failures map to a documented code
+- `secrets/provider.ts` — env / command / prompt providers converging on one
+  in-memory slot, with bounded retry for the Tang boot-order race
+- `secrets/redact.ts` — scrubs registered values and known shapes before
+  anything reaches a report, log or notification
+- `utils/` — logger (errors to **stderr**, so stdout stays machine-readable),
+  PID lock, state-dir hardening, CPU-count concurrency, `Bun.Glob` matching
 
-**Interfaces** (`src/interfaces/`): `FileInfo`, `ScanResult`, `FileScannerInterface`, Internxt CLI result types, `Verbosity` enum (Quiet/Normal/Verbose).
+**Being built** (see [docs/roadmap.md](docs/roadmap.md)): `config/`, `engine/`,
+`ops/`, `notify/`. Commands in `index.ts` marked `implemented: false` exit 2 —
+a scheduler that treats an unbuilt command as success is worse than one that
+fails loudly.
 
-**Utilities** (`src/utils/`): logger with verbosity levels (errors go to **stderr**, everything else stdout), filesystem helpers (checksums, file ops), CPU core detection, PID locking, state-dir hardening.
-
-Services are factory functions (`createX(...)`) taking an optional dependencies object. Tests inject fakes through that parameter — there is no DI container and no private-property patching.
+**Also in this repo:** `docker/` holds the runtime image, the entrypoint
+guards, and the Phase 0 transport-proof harness. Those are shell, tested by
+`bun run test:shell`, and they run without a Docker daemon.
 
 ## Code Conventions
 
 - Follow Conventional Commits: `feat:`, `fix:`, `perf:`, `docs:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`. Breaking changes use `feat!:` or `BREAKING CHANGE:` footer.
-- Tests are colocated with source files (`.test.ts` suffix). Use `bun:test` imports (`describe`, `it`, `expect`, `spyOn`).
-- Files: kebab-case. Classes: PascalCase. Interfaces: PascalCase. Functions/variables: camelCase.
-- Always use `const`/`let` (never `var`), strict equality (`===`), and curly braces for control structures.
-- KISS: prefer simple solutions first. Clean up after changes — remove dead code, improve readability.
-
-## Verification Commands
-
-After making any changes, run locally before committing:
-
-```bash
-bun run fix          # optional: auto-fix lint/format issues
-bun run lint         # oxlint
-bun run format       # oxfmt --check
-bun run typecheck    # tsc --noEmit
-bun test             # full test suite
-bun test --coverage  # coverage + threshold validation
-bun run build        # build artifact validation
-bun test path/to/file.test.ts  # optional: run a single test file while iterating
-```
-
-### Typecheck CI Debug
-
-- CI runs on Bun `1.3.9`, so callback typings can differ from newer local Bun toolchains.
-- If a CI typecheck fails but local checks pass, inspect the exact CI error with:
-
-```bash
-gh run list --workflow ci.yml --limit 5
-gh run view <run-id> --log
-```
-
-- For stream write overrides (`process.stdout.write`/`process.stderr.write`), avoid hardcoding a callback signature that only matches one Bun/Node typings set. Prefer compatibility wrappers/casts that preserve runtime behavior while satisfying both local and CI type definitions.
-
-To cut a release when ready (triggers semantic-release → version bump → CHANGELOG → GitHub release → 7-platform build):
-
-```bash
-gh workflow run create-release-metadata.yml --ref master
-# or use the interactive helper (asks for confirmation)
-bun run release:trigger
-```
+- Work lands directly on `master`. No feature branches, no PRs for ordinary work.
+- **Released versions only.** Never depend on an unmerged PR, a vendored patch,
+  or a source build of a third-party tool. Prefer runtime feature detection so
+  a capability starts working when a release ships it.
+- Tests are colocated with source files (`.test.ts`). Use `bun:test` imports.
+- Files: kebab-case. Classes: PascalCase. Functions/variables: camelCase.
+- Always `const`/`let`, strict equality, curly braces for control structures.
+- KISS: prefer simple solutions. Remove dead code rather than leaving it.
 
 ## Testing Patterns
 
-Mock factories are available in `test-config/mocks/test-helpers.ts` (imported via named exports):
+There is no mock-factory module — it was deleted with the engine it mocked.
+The design favours **injection over mocking**: pure functions for arg, env and
+event construction, and a single injectable `SpawnFn` for anything touching a
+process. Pass hand-written fakes through a dependencies parameter:
 
-- `createMockInternxtService()` — checkCLI, uploadFile, uploadFileWithProgress, createFolder, listFiles, fileExists, deleteFile
-- `createMockResumableUploader()` — shouldUseResumable, uploadLargeFile, getUploadProgress, canResume, clearState
-- `createMockFileScanner(sourceDir?)` — scan, getFilesToUpload, updateFileHash, updateFileState, saveState
-- `createMockFileInfo(filePath, sourceDir?, needsUpload?)` — full FileInfo with defaults
-- `createMockLoggers()` — verbose, info, success, warning, error, always
-- `createMockFs()` — readFileSync, writeFileSync, existsSync, promises.\*
-- `mockProcessOutput()` — capture stdout/stderr in tests (call `.restore()` in afterEach)
+```ts
+createScheduler({ cronConstructor: FakeCron, exitFn: (c) => exited.push(c) });
+resolveSecret({ kind: 'command', command: 'x' }, { runCommand: fakeRun });
+```
 
-The `spyOn` wrapper from test-helpers gracefully handles Bun's accessor property limitation. Note it silently returns a no-op mock when spying fails, so a passing assertion on a spy is not by itself proof the spy attached.
+Shell code under `docker/` is tested by `docker/*.test.sh` with stub binaries.
+Those cover the entrypoint's security guards and the Phase 0 verdict
+arithmetic — both fail silently at 02:00 if they regress.
 
-`skipIfSpyingIssues(name, fn)` — for tests that may fail due to Bun spyOn limits. Currently unused.
+Write tests that would catch a real defect. Two that already did: the Phase 0
+NDJSON parser scored a false PASS on a SIGKILLed run because `jq` aborts on one
+malformed line, and the redaction pass is verified against a realistic stderr
+blob carrying every live secret.
 
-Inject fakes through the factory's dependencies parameter, e.g.
-`createUploader(concurrency, target, verbosity, { internxtService: mockService })`.
+## Verification Commands
 
-## How to Add a New Service
+Run locally before committing:
 
-1. Create `src/core/<domain>/<service-name>.ts` exporting a `createX(...)` factory
-2. Add interface to `src/interfaces/` if it needs to be mocked
-3. Create `src/core/<domain>/<service-name>.test.ts` colocated
-4. Add `createMock<ServiceName>()` factory to `test-config/mocks/test-helpers.ts` and export from default
-5. Accept it via the consumer factory's dependencies parameter
-6. Run `bun run check` to verify
+```bash
+bun run fix            # optional: auto-fix lint/format
+bun run check          # lint + format + typecheck + tests + shell tests
+bun run verify:release # + coverage threshold + build
+```
+
+CI blocks on `bun audit --prod` — the dependency tree that ships. The full
+`bun audit` runs informationally: semantic-release drags in ~66 advisories that
+`bun update` cannot resolve, and gating on them left CI red for five months.
+
+### Typecheck CI Debug
+
+- CI runs on Bun `1.3.9`, so callback typings can differ from newer local toolchains.
+
+```bash
+gh run list --workflow ci.yml --limit 5
+gh run view <run-id> --log-failed
+```
+
+- For stream write overrides (`process.stdout.write`/`process.stderr.write`), avoid hardcoding a callback signature that only matches one Bun/Node typings set. Prefer compatibility wrappers/casts that satisfy both.
+
+To cut a release (semantic-release → version bump → CHANGELOG → GitHub release
+→ 7-platform build):
+
+```bash
+gh workflow run create-release-metadata.yml --ref master
+bun run release:trigger   # interactive helper, asks for confirmation
+```
+
+## Adding a module
+
+1. Create `src/<area>/<name>.ts` exporting a `createX(...)` factory or pure functions
+2. Create `src/<area>/<name>.test.ts` colocated
+3. Take collaborators via an optional dependencies parameter so tests inject fakes
+4. Throw `RunFailure` with the right `RunFailureCode` rather than bare `Error`
+5. `bun run check`

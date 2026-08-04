@@ -24,8 +24,8 @@ else is not evidence.
 Two things must be true, and one decision must be made.
 
 1. **Generate and escrow the restic key first.** The key lives nowhere on the
-   machine (see [security.md](./security.md) once written, and Phase 7 of the
-   plan). That means an un-escrowed repository is unrecoverable from the moment
+   machine (see [security.md](./security.md)). That means an un-escrowed
+   repository is unrecoverable from the moment
    it is created. Generate ≥128 bits of entropy, escrow it in your Bitwarden
    Families vault **and** on a printed card, before running `t1`.
 2. **The repo path must be disposable.** Phase 0 runs `forget --prune` and
@@ -110,10 +110,11 @@ why the supervisor must never pass `--no-extra-verify`.
 Internxt's trash counts against quota and never auto-expires, and rclone's
 backend implements neither `Purge()` nor `CleanUp()`. Three outcomes:
 
-- **(a)** quota drops after `prune` → trash is not in the path. `internxt-service.ts`
-  can be deleted entirely.
-- **(b)** quota drops only after `internxt trash-clear` → keep ~40 lines of it;
-  prune becomes a guarded two-phase operation. _Expected._
+- **(a)** quota drops after `prune` → trash is not in the path. Nothing further
+  is needed.
+- **(b)** quota drops only after `internxt trash-clear` → prune becomes a
+  guarded two-phase operation, and a minimal Internxt-CLI wrapper has to be
+  written for that one command. _Expected._
 - **(c)** quota never drops → the repo grows monotonically. At 4 TB into a
   10 TB plan this is a years-out problem: run append-only, skip prune, revisit
   around 70% quota.
@@ -141,8 +142,10 @@ unprotected window is the dominant risk — not an imperfect supervisor.
 2. **Internxt as a secondary `restic copy` target**, primary elsewhere.
 3. **`rclone crypt` + `rclone sync`** — keeps encryption and chunked resume,
    loses dedup, snapshots and point-in-time restore. Materially worse.
-4. **Abort the pivot.** Keep the current tool and narrow its documented
-   `--resume` contract. A legitimate outcome; Phase 0 exists to make it cheap.
+4. **Abort Internxt entirely** and back up somewhere else. The legacy
+   Internxt-CLI engine has been deleted and is not a fallback — it had no
+   resume, no snapshots and a 40 GB file cap, which is why it was replaced.
+   Option 1 is the real answer here; Phase 0 exists to reach it cheaply.
 
 ---
 
