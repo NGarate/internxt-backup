@@ -1,7 +1,5 @@
 # Live E2E harness contract
 
-Updated: 2026-08-04 — retargeted from the Internxt-CLI engine to restic/rclone.
-
 What a run against a real Internxt account must prove, and the guardrails it
 must respect.
 
@@ -70,8 +68,7 @@ complete with:
 Copy the NDJSON into `test-fixtures/restic/`. The parser tests run against
 **real** restic output rather than output invented from the docs — including
 the awkward cases a live run produces naturally: a stream truncated mid-line by
-SIGKILL, and rclone warnings interleaved with JSON. Both have already broken
-the report parser once.
+SIGKILL, and rclone warnings interleaved with JSON.
 
 ---
 

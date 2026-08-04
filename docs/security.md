@@ -113,8 +113,7 @@ reAuthorize()              on HTTP 401 from the server
 ```
 
 An unwritable config discards every refresh and forces the re-login path — so
-"no config file on disk" would _cause_ a 2FA prompt on every expiry. This
-project made exactly that mistake before reading the source.
+"no config file on disk" would _cause_ a 2FA prompt on every expiry.
 
 So the config is a real file, **encrypted at rest** (`RCLONE_ENCRYPT_V0`) with
 `RCLONE_CONFIG_PASS` supplied from the environment. Verified: rclone reads and

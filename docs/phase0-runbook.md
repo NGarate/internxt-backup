@@ -160,11 +160,6 @@ are fixture-driven from **real** restic output rather than output invented from
 the docs — including the awkward cases this phase produces naturally: a stream
 truncated mid-line by SIGKILL, and rclone warnings interleaved with JSON.
 
-Both of those already broke the report parser once. `summary_field` originally
-let `jq` parse the file as a JSON stream, which aborts entirely on a single
-malformed line — so a killed run silently reported zero bytes. It now reads raw
-lines and parses each with `fromjson?`. `docker/phase0/lib.test.sh` covers it.
-
 ---
 
 ## Testing the harness itself

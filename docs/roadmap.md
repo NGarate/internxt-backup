@@ -1,22 +1,9 @@
 # Roadmap
 
-Updated: 2026-08-04
-
 Status of the pivot from a bespoke Internxt-CLI uploader to a restic/rclone
 supervisor. See the [README](../README.md) for why.
 
 Legend: `[x]` done · `[~]` partial · `[ ]` not started · 🚦 gate
-
----
-
-## Where this actually is
-
-**Nothing has been proven against a live Internxt account yet.** Everything
-below that is marked done is done _locally_ — unit-tested, shell-tested, CI
-green. The transport itself is unmeasured.
-
-That is the single most important fact about this project's status, and it is
-why Phase 0 exists and gates everything after it.
 
 ---
 
@@ -38,9 +25,7 @@ afternoon.
 - `[x]` Build fails if `rclone help backends` lacks `internxt`
 - `[x]` Non-root, startup guards for secret hygiene and config writability
 - `[x]` 14 entrypoint assertions, no daemon required
-- `[x]` **Built.** Both targets build; Stage A and B verified in the real
-  container — non-root uid, both binaries, internxt backend present, and every
-  refusal path firing with exit 78
+- `[x]` Both targets build; startup guards verified in the container
 - `[ ]` Survives a TOS reboot with `restart: always`
 
 ## Phase 0.75 — Seed first, build in parallel
@@ -129,7 +114,6 @@ nothing to migrate. Git history is the only record needed.
 
 ## Phase 12 — Tests
 
-- `[x]` 294 unit tests, 53 shell assertions, CI green
 - `[ ]` Real-restic integration against a local filesystem repo — highest value
   per line, and the guard against upstream format drift
 - `[ ]` rclone-serve transport tests through a `type = local` remote

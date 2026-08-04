@@ -1,7 +1,5 @@
 # internxt-backup Verification Contract
 
-Updated: 2026-03-23
-
 This file is the repo-level source of truth for what must be proven before a
 slice is considered done.
 
@@ -68,8 +66,7 @@ its outcome:
 
 ## Current blocked areas
 
-Known gaps, not implied pass conditions. Updated 2026-08-04 for the restic
-pivot.
+Known gaps, not implied pass conditions.
 
 - **Nothing has been proven against a live Internxt account.** The Phase 0
   harness exists ([phase0-runbook.md](./phase0-runbook.md)) but has not been
@@ -77,17 +74,8 @@ pivot.
   and token lifetime are all unmeasured. This gates every other claim
 - no machine-readable run report is emitted yet, though the schema and the
   failure taxonomy both exist
-- the supervisor has no data path yet. The legacy engine was deleted, and the
-  config, engine and ops layers that replace it are not built — so no code in
-  this repo currently transfers anything
-
-Resolved since the last revision:
-
-- coarse exit codes — a 15-class taxonomy with stable numbers now exists
-- `--resume` claiming more than it did — the bespoke uploader is gone; restic
-  provides genuine resume, and Phase 0 T3 measures its actual cost
-- the container is unbuilt — both targets now build, with the startup guards
-  verified against real containers
+- the supervisor has no data path: the config, engine and ops layers are not
+  built, so no code here transfers anything
 
 ## Definition of done
 

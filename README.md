@@ -55,32 +55,16 @@ verifies its own SHA-256 over every blob — there is no comparison to get wrong
 
 ## Status
 
-Honest state as of 2026-08-04. The pivot is in progress on `master`.
+Pre-production. The restic transport has not yet been validated against a live
+Internxt account, and the supervisor's config, engine and ops layers are not
+built — so nothing here moves data yet.
 
-**Working and tested**
+Start with [Phase 0](docs/phase0-runbook.md), which proves the transport and
+measures it. [docs/roadmap.md](docs/roadmap.md) tracks what is done.
 
-- Failure taxonomy: 15 classes mapped to stable exit codes
-- Secret provider (env / command / prompt) with bounded retry, plus a redaction
-  pass proven not to leak the live passphrase into reports or notifications
-- Docker image builds and runs: pinned, SHA256-verified restic 0.19.1 and
-  rclone 1.75.0, non-root, with startup guards for secret hygiene and config
-  writability all verified against the real container (285 MB phase0 /
-  422 MB runtime)
-- Phase 0 transport-proof harness (T0–T9) with automatic pass/fail verdicts
-- 294 unit tests, 53 shell assertions, CI green
-
-**Not done**
-
-- **Phase 0 has never run against a live Internxt account.** Throughput, resume
-  cost, restore fidelity and token lifetime are all unmeasured
-- Config layer, restic engine layer, run reports, scheduling, retention,
-  verification rotation, restore drills, alerting — designed, not built
-- The legacy Internxt-CLI engine is still present and is still the only code
-  path that has ever moved a byte. It is retired once the new one is proven
-
-**Known constraint:** with 2FA enabled, the first login needs one interactive
+**Known constraint:** with 2FA enabled the first login needs one interactive
 code. After that rclone refreshes its own token indefinitely, provided its
-config stays writable. See [How login works](#how-login-works).
+config stays writable — see [How login works](#how-login-works).
 
 ---
 
@@ -133,8 +117,7 @@ reAuthorize()              on HTTP 401 from the server
 
 Refreshing never needs 2FA — **but only if rclone can write the rotated token
 back.** `PutToken` writes to the rclone config, so an unwritable or `/dev/null`
-config discards every refresh and forces the re-login path. This project made
-exactly that mistake before reading the source.
+config discards every refresh and forces the re-login path.
 
 Hence: a real config file, **encrypted at rest**, with `RCLONE_CONFIG_PASS` from
 the environment. Ciphertext on disk, key in memory. The container refuses to

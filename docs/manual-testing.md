@@ -130,8 +130,8 @@ Two consequences:
    fallback, reached only when the refresh itself is rejected.
 2. **The refresh is only useful if rclone can write the rotated token back.**
    `PutToken` writes to the rclone config. Point `RCLONE_CONFIG` at `/dev/null`
-   — as this project briefly did — and every refresh is discarded, guaranteeing
-   the re-login path and a 2FA prompt on every expiry.
+   and every refresh is discarded, guaranteeing the re-login path and a 2FA
+   prompt on every expiry.
 
 So the config is a **real, writable file**, encrypted at rest with
 `RCLONE_CONFIG_PASS` from the environment. Ciphertext on disk, key in memory.
@@ -257,14 +257,14 @@ Results land in `/Volume1/appdata/internxt-backup/phase0-out/`:
 Those fixtures matter. Phase 12's parser tests run against real restic output
 rather than output invented from the docs — including the awkward cases this
 phase produces naturally: a stream truncated mid-line by SIGKILL, and rclone
-warnings interleaved with JSON. Both already broke the report parser once.
+warnings interleaved with JSON.
 
 ---
 
 ## Stage E — host-side tests (no Docker, seconds)
 
 ```bash
-bun run check        # lint, format, typecheck, 294 unit tests, 44 shell assertions
+bun run check        # lint, format, typecheck, unit tests, shell tests
 bun run test:shell   # just the entrypoint guards and Phase 0 helpers
 ```
 
