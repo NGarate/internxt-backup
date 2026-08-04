@@ -20,8 +20,9 @@ docker run --rm --entrypoint sh internxt-backup:phase0 -c '
   echo "--- binaries ---";  rclone version | head -1; restic version; jq --version
   echo "--- backend ---";   rclone help backends | grep -w internxt
   echo "--- env ---";       echo "RCLONE_CONFIG=$RCLONE_CONFIG"
-  echo "--- no secrets on disk ---"
-  find / -xdev \( -name "rclone.conf" -o -name "restic-password" \) 2>/dev/null | grep . && echo "LEAK" || echo "clean"
+  echo "--- no baked-in credentials ---"
+  find / -xdev -name "restic-password" 2>/dev/null | grep . && echo "LEAK" || echo "clean"
+  [ -s "$RCLONE_CONFIG" ] && echo "LEAK: config baked into image" || echo "clean"
 '
 ```
 
@@ -37,15 +38,18 @@ jq-1.7...
 --- backend ---
   internxt     Internxt Drive
 --- env ---
-RCLONE_CONFIG=/dev/null
---- no secrets on disk ---
+RCLONE_CONFIG=/state/rclone.conf
+--- no baked-in credentials ---
+clean
 clean
 ```
 
 **What each line proves.** `uid=1000` — not running as root. `internxt` in the
-backend list — the reason for the ≥1.73 pin held. `RCLONE_CONFIG=/dev/null` —
-rclone cannot read or write a config file, so credentials can only come from
-the environment.
+backend list — the reason for the ≥1.73 pin held. `RCLONE_CONFIG` pointing at
+`/state` — rclone has somewhere writable to persist rotated tokens, which is
+what keeps 2FA to a single bootstrap (see C1). Both `clean` lines — no
+credentials are baked into the image; the config is created at bootstrap on a
+mounted volume.
 
 ---
 
@@ -61,7 +65,7 @@ docker run --rm internxt-backup:phase0 sleep 1; echo "exit=$?"
 
 Expected `exit=0`, no output.
 
-**B2. A secret written to disk refuses startup:**
+**B2. The restic passphrase on disk refuses startup:**
 
 ```bash
 mkdir -p /tmp/ib-test-state && echo "hunter2" > /tmp/ib-test-state/restic-password
@@ -71,9 +75,21 @@ docker run --rm -v /tmp/ib-test-state:/state internxt-backup:phase0 sleep 1; ech
 Expected:
 
 ```
-entrypoint: refusing to start: secret file present at /state/restic-password (see docs/security.md)
+entrypoint: refusing to start: restic passphrase found on disk at /state/restic-password (see docs/security.md)
 exit=78
 ```
+
+**B2b. A _plaintext_ rclone config refuses startup:**
+
+```bash
+printf '[internxt]\ntype = internxt\npass = xyz\n' > /tmp/ib-test-state/rclone.conf
+docker run --rm -v /tmp/ib-test-state:/state internxt-backup:phase0 sleep 1; echo "exit=$?"
+rm -f /tmp/ib-test-state/rclone.conf
+```
+
+Expected exit `78` and `is not encrypted`. The config is _allowed_ on disk —
+it has to be, so tokens can rotate — but never in plaintext, since it holds the
+account password and the end-to-end encryption mnemonic.
 
 **B3. An unwritable state volume refuses startup:**
 
@@ -92,134 +108,110 @@ Docker daemon at all.
 
 ## Stage C — credentials and connectivity (~2 min)
 
-### C1. Obscure the Internxt password
+### C1. How Internxt login actually works
 
-`rclone obscure` is **obfuscation, not encryption** — `rclone reveal` reverses
-it trivially. It exists because rclone's config format expects it, not as a
-security measure. Read from stdin so the password never enters shell history
-or `ps`:
+Worth understanding before running anything, because it determines whether you
+ever see a 2FA prompt again.
+
+Reading `backend/internxt/auth.go` in the v1.75.0 **release**:
+
+```
+reAuthorize()            ← called after the server returns 401
+  └─ refreshOrReLogin()
+       ├─ refreshJWTToken()   RefreshToken endpoint. NO 2FA code.
+       │                      persists the rotated JWT via oauthutil.PutToken
+       └─ on 401 only:
+          reLogin()           full login. DOES need a 2FA code.
+```
+
+Two consequences:
+
+1. **Refreshing does not need 2FA.** Only a full re-login does, and that is the
+   fallback, reached only when the refresh itself is rejected.
+2. **The refresh is only useful if rclone can write the rotated token back.**
+   `PutToken` writes to the rclone config. Point `RCLONE_CONFIG` at `/dev/null`
+   — as this project briefly did — and every refresh is discarded, guaranteeing
+   the re-login path and a 2FA prompt on every expiry.
+
+So the config is a **real, writable file**, encrypted at rest with
+`RCLONE_CONFIG_PASS` from the environment. Ciphertext on disk, key in memory.
+That combination is verified: rclone reads _and writes_ an encrypted config
+non-interactively with only the env passphrase, and it stays encrypted after
+the write.
+
+**Why the restic passphrase is still environment-only, and this is not
+inconsistent.** They are different secrets with different risk:
+
+|                   | Disclosure                                   | Loss                   | Must be writable   |
+| ----------------- | -------------------------------------------- | ---------------------- | ------------------ |
+| restic passphrase | every backup readable                        | **4 TB unrecoverable** | no                 |
+| rclone config     | rclone only ever sees restic-encrypted blobs | re-bootstrap           | **yes, to rotate** |
+
+The crown jewel stays in memory. The credential that has to rotate gets a file,
+encrypted, with its key in memory. Applying one blanket rule to both would have
+broken the mechanism that avoids 2FA in the first place.
+
+### C2. Choose the two passphrases
 
 ```bash
-# (C1 is only needed if you want to check the obscure round-trip; bootstrap-auth.sh
-# does the obscuring for you.)
-read -rs INXT_PASS
-printf '%s' "$INXT_PASS" | docker run --rm -i --entrypoint rclone internxt-backup:phase0 obscure -
+read -rs RESTIC_KEY; export RESTIC_KEY     # protects the backups
+read -rs CFGPASS;    export CFGPASS        # encrypts the rclone config
 ```
 
-> ⚠️ **Check the output is not `JOirx_lXAmylkpwrn1tZpw`.** If stdin is empty
-> rclone silently obscures the literal hyphen instead of erroring, and you get
-> a valid-looking string that is not your password. This fails later as an
-> authentication error with no hint as to why.
+> 🔴 **Escrow `RESTIC_KEY` before creating the repository.** It lives nowhere on
+> the machine, so an un-escrowed repo is unrecoverable from the moment it
+> exists. Bitwarden Families vault **and** a printed card, both off the NAS.
+>
+> `CFGPASS` is lower stakes — losing it costs a re-bootstrap, not the backups —
+> but keep it in the password manager too.
 
-### C2. Export the environment
-
-Remote name `internxt` maps to `RCLONE_CONFIG_INTERNXT_*` — rclone upper-cases
-the name. It must match the remote in `RESTIC_REPOSITORY`.
+### C3. Bootstrap (the only step that needs a 2FA code)
 
 ```bash
-read -rs RESTIC_KEY          # the restic passphrase — escrow it FIRST, see below
-export RESTIC_KEY
-export INXT_EMAIL="you@example.com"
-export INXT_OBSCURED="<the string from C1>"
+docker compose -f docker/docker-compose.phase0.yml exec -it \
+  -e RCLONE_CONFIG_PASS="$CFGPASS" phase0 /phase0/bootstrap-auth.sh
 ```
 
-> 🔴 **Escrow the restic passphrase before you create the repository.** It lives
-> nowhere on the machine, so an un-escrowed repo is unrecoverable from the
-> moment it exists. Put it in your Bitwarden Families vault **and** on a
-> printed card before running C3.
+`n` → name `internxt` → storage `internxt` → email, password, 2FA code →
+accept defaults. It then verifies with `rclone about`, encrypts the config at
+rest, re-verifies through the encrypted config, and `chmod 0600`s it. It
+refuses to leave credentials in plaintext if encryption fails.
 
-### C3. Bootstrap authentication (required — 2FA cannot be done unattended)
-
-**Email and password alone are not enough.** Probing the backend directly
-shows it requires a `mnemonic` **and** a `token` already present in config, and
-never performs a fresh login at runtime:
-
-```
-email + pass only   →  "mnemonic is required - please run: rclone config reconnect"
-        + mnemonic  →  "failed to get token ... empty token found"
-```
-
-Both are produced by an interactive `rclone config`, which is where the 2FA
-code is entered. Neither is a documented option, but both are readable from
-the environment — which is what makes an otherwise-interactive backend usable
-with no config file on disk.
-
-Authenticate once, with a TTY:
-
-```bash
-docker compose -f docker/docker-compose.phase0.yml exec -it phase0 \
-  /phase0/bootstrap-auth.sh
-```
-
-Answer `n` → name `internxt` → storage `internxt` → email, password, 2FA code
-→ accept defaults. It verifies with `rclone about` before emitting anything,
-then prints an export block. Nothing touches persistent storage: the temporary
-config lives in `/dev/shm` and is overwritten and deleted on exit.
-
-```bash
-export RCLONE_CONFIG_INTERNXT_TYPE=internxt
-export RCLONE_CONFIG_INTERNXT_EMAIL='...'
-export RCLONE_CONFIG_INTERNXT_PASS='...'
-export RCLONE_CONFIG_INTERNXT_MNEMONIC='...'
-export RCLONE_CONFIG_INTERNXT_TOKEN='...'
-```
-
-> 🔴 That block contains your password, your **end-to-end encryption
-> mnemonic**, and a session token. Treat it exactly as you would the restic
-> passphrase. Never put it in a compose file, a `.env`, or a shell that records
-> history. And **escrow the mnemonic**: Internxt is zero-knowledge, so losing
-> the password _and_ mnemonic loses the account independently of restic.
+Re-running later is safe: if the existing config still authenticates it exits
+without touching anything.
 
 **This is also the entitlement gate.** Internxt paywalled CLI/WebDAV/rclone to
 paid tiers in 2025 and de-entitled some lifetime accounts. If `rclone about`
 fails with an authorisation error, nothing downstream matters.
 
-### C3b. Unattended re-authentication is not available today
+> 🔴 Escrow the Internxt **account password and its mnemonic** as well.
+> Internxt is zero-knowledge: losing both loses the account, independently of
+> restic. Three secrets, one recovery card.
 
-This project uses **released versions only** — no unmerged PRs, no patched
-builds, no source compilation. A dependency that exists only as an open pull
-request can be force-pushed, rebased or abandoned, and pinning a commit does
-not turn an unreviewed branch into a supported artifact.
+### C4. The remaining caveat, and how long it gives you
 
-The consequence is concrete and worth stating once: **no released rclone can
-re-authenticate to Internxt unattended while 2FA is enabled.** Supplying a TOTP
-code has no headless path. `otp_secret_key` exists only in
-[rclone#9529](https://github.com/rclone/rclone/pull/9529), which is unmerged
-with changes requested.
+[rclone#9584](https://github.com/rclone/rclone/issues/9584): routine operations
+call the refresh endpoint but **discard** the rotated token, so the stored token
+ages from when it was _issued_, not from last use. It is renewed reactively —
+an operation gets a 401, the refresh fires, the new token persists.
 
-So a session works until its token expires, then backups stop until someone
-re-runs the bootstrap with an authenticator to hand. How long that is has never
-been published, which is exactly why C4 measures it.
+In practice that is fine while backups run regularly: the nightly job is the
+keepalive. The failure mode is a long idle stretch — NAS off for weeks — after
+which the token may be too stale for the refresh endpoint to renew, and you
+re-run the bootstrap.
 
-The scripts detect `otp_secret_key` at **runtime**, not build time, so the day
-a release ships it this starts working with no code change — and until then
-nothing here depends on an unmerged branch.
+[PR #9588](https://github.com/rclone/rclone/pull/9588) fixes it and is approved
+by an Internxt contributor, awaiting rclone's code owner. **We do not carry it**
+— released versions only. When it ships in a release, this caveat disappears
+with no change here.
 
-**Your options, given released-only:**
+Phase 0 measures the actual numbers rather than guessing:
 
-|                                | Trade-off                                                                                                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Re-bootstrap on expiry**     | Costs a human every time the token dies. Viable if C4 shows a long lifetime; painful for a ~10-day seed. Seed units are independent and restic resumes, so it is survivable — just manual.                          |
-| **Disable 2FA on the account** | Makes released rclone fully unattended. You are already placing the password and mnemonic in the environment, so the marginal loss is 2FA on _interactive and web_ login. That is a real loss, and it is your call. |
-| **Switch provider**            | B2 application keys and Storj access grants are designed for machines, never expire this way, and are shipped in released rclone. Precisely what keeping `[repo] backend` pluggable was for.                        |
-| **Wait for #9529**             | No timeline; changes requested 2026-07-10.                                                                                                                                                                          |
-
-### C4. Measuring the token lifetime
-
-Nobody has published how long an Internxt session token lasts, so Phase 0
-measures it rather than guessing.
-
-`t0` stamps `auth-verified-at.txt`. Every later test scans its stderr for
-rclone's reconnect request, so if the session dies mid-run you get an explicit
-`AUTH FAIL` verdict naming the test it died in — not an obscure transport
-error. The delta between the two is your usable lifetime.
-
-That single number decides which option in C3b you take:
-
-- **Survives Phase 0 (~a day)** → nightly incrementals are fine; re-bootstrap
-  occasionally, and the seed is workable in units.
-- **Dies within hours** → a ~10-day seed is not practical by hand. Disabling
-  2FA or switching provider become the realistic choices.
+- `t0` decodes the stored JWT's `exp` claim and reports hours remaining
+- `t0` fails outright if the config is not writable, since that silently
+  reinstates the 2FA requirement
+- every later test scans stderr for a reconnect request, producing an explicit
+  `AUTH FAIL` naming the test it died in
 
 ---
 
@@ -236,10 +228,11 @@ the final repository size.
 ```bash
 docker compose -f docker/docker-compose.phase0.yml up -d
 
+# Credentials come from the encrypted config written by C3; only the two
+# passphrases are passed in, and only for this exec.
 docker compose -f docker/docker-compose.phase0.yml exec \
   -e RESTIC_PASSWORD="$RESTIC_KEY" \
-  -e RCLONE_CONFIG_INTERNXT_EMAIL="$INXT_EMAIL" \
-  -e RCLONE_CONFIG_INTERNXT_PASS="$INXT_OBSCURED" \
+  -e RCLONE_CONFIG_PASS="$CFGPASS" \
   phase0 /phase0/phase0.sh all
 ```
 

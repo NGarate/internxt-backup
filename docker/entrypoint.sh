@@ -31,18 +31,34 @@ for dir in "$STATE_DIR" "$CACHE_DIR"; do
 done
 
 # --- secret hygiene -------------------------------------------------------
-# Secrets arrive from the environment and live only in memory. Anything on
-# disk is a mistake worth stopping for, not warning about: it is exactly the
-# artifact that ends up in a /Volume1 snapshot or a support bundle.
+# The restic passphrase must never be on disk. Its disclosure exposes every
+# backup and its loss is unrecoverable, so a file here is a mistake worth
+# stopping for: it is exactly the artifact that ends up in a /Volume1 snapshot
+# or a support bundle.
 for stray in \
-  "$STATE_DIR/restic-password" "$STATE_DIR/rclone.conf" \
-  "$CONFIG_DIR/rclone.conf" "$CONFIG_DIR/restic-password" \
+  "$STATE_DIR/restic-password" "$CONFIG_DIR/restic-password" \
   /secrets/restic-password /run/secrets/restic-password
 do
-  [ -e "$stray" ] && die "refusing to start: secret file present at $stray (see docs/security.md)"
+  [ -e "$stray" ] && die "refusing to start: restic passphrase found on disk at $stray (see docs/security.md)"
 done
-if [ "${RCLONE_CONFIG:-/dev/null}" != "/dev/null" ] && [ -s "${RCLONE_CONFIG}" ]; then
-  die "refusing to start: RCLONE_CONFIG points at a real file (${RCLONE_CONFIG}); credentials belong in RCLONE_CONFIG_<REMOTE>_<KEY>"
+
+# The rclone config is deliberately a real, writable file: the internxt
+# backend persists rotated JWTs there, and that rotation is what avoids
+# needing a 2FA code. It must be encrypted at rest, though — a plaintext one
+# holds the account password and the end-to-end encryption mnemonic.
+if [ -n "${RCLONE_CONFIG:-}" ] && [ -s "${RCLONE_CONFIG}" ]; then
+  if ! head -c 200 "${RCLONE_CONFIG}" 2>/dev/null | grep -q 'RCLONE_ENCRYPT_V0'; then
+    die "refusing to start: ${RCLONE_CONFIG} is not encrypted. Run /phase0/bootstrap-auth.sh, or 'rclone config encryption set' (see docs/security.md)"
+  fi
+  [ -n "${RCLONE_CONFIG_PASS:-}" ] \
+    || die "RCLONE_CONFIG_PASS is unset but ${RCLONE_CONFIG} is encrypted; rclone cannot read or rotate tokens without it"
+fi
+# A writable config is required, not optional: without it every refreshed
+# token is discarded and the next run falls back to a login that needs 2FA.
+if [ -n "${RCLONE_CONFIG:-}" ] && [ "${RCLONE_CONFIG}" != "/dev/null" ]; then
+  cfg_dir=$(dirname "${RCLONE_CONFIG}")
+  [ -w "$cfg_dir" ] \
+    || die "${cfg_dir} is not writable; rclone must be able to persist rotated tokens or 2FA will be required on every expiry"
 fi
 
 # Phase 0/0.5 build the transport image without the supervisor so the

@@ -47,19 +47,29 @@ docker compose -f docker/docker-compose.phase0.yml up -d
 
 Edit the compose file first so `/data/sample` points at your chosen slice.
 
-Secrets are passed per-exec and never written to disk or into the compose file:
+Authenticate once — the only step that needs a 2FA code:
 
 ```bash
-read -rs KEY                     # paste the restic passphrase, no echo
+read -rs CFGPASS                 # encrypts the rclone config at rest
+docker compose -f docker/docker-compose.phase0.yml exec -it \
+  -e RCLONE_CONFIG_PASS="$CFGPASS" phase0 /phase0/bootstrap-auth.sh
+```
+
+Then run the tests. Only the two passphrases are passed in; the account
+credentials live in the encrypted config the bootstrap wrote:
+
+```bash
+read -rs KEY                     # the restic passphrase, no echo
 docker compose -f docker/docker-compose.phase0.yml exec \
   -e RESTIC_PASSWORD="$KEY" \
-  -e RCLONE_CONFIG_INTERNXT_EMAIL="you@example.com" \
-  -e RCLONE_CONFIG_INTERNXT_PASS="$(rclone obscure 'your-internxt-password')" \
+  -e RCLONE_CONFIG_PASS="$CFGPASS" \
   phase0 /phase0/phase0.sh all
 ```
 
-`rclone obscure` is **obfuscation, not encryption** — anyone with the string can
-reverse it. It is required by rclone's config format, not a security measure.
+Neither passphrase is written to disk or placed in the compose file. The
+config **is** on disk, deliberately and encrypted — rclone must be able to
+write rotated JWTs back to it, and that persistence is exactly what keeps 2FA
+to this single bootstrap. See [manual-testing.md](./manual-testing.md#c1-how-internxt-login-actually-works).
 
 ---
 

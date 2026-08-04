@@ -20,7 +20,9 @@ set -uo pipefail
 
 export RESTIC_REPOSITORY="rclone:${PHASE0_REMOTE}:${PHASE0_REPO_PATH}"
 export RESTIC_PACK_SIZE
-export RCLONE_CONFIG="${RCLONE_CONFIG:-/dev/null}"
+# A real, writable config — not /dev/null. The backend persists rotated JWTs
+# here, and that persistence is what keeps 2FA to a single bootstrap.
+export RCLONE_CONFIG="${RCLONE_CONFIG:-/state/rclone.conf}"
 
 # --b2-hard-delete is dropped from restic's default rclone args: it is inert
 # against a non-B2 remote, but there is no reason to carry it.
@@ -78,37 +80,31 @@ require_secrets() {
   if [ -z "${RESTIC_PASSWORD:-}" ] && [ -z "${RESTIC_PASSWORD_COMMAND:-}" ]; then
     die "set RESTIC_PASSWORD or RESTIC_PASSWORD_COMMAND (do not put it in the compose file)"
   fi
-  if [ -z "${RCLONE_CONFIG_INTERNXT_TYPE:-}" ]; then
-    die "RCLONE_CONFIG_INTERNXT_TYPE is unset; define the remote from the environment (see docs/security.md)"
+  # Authentication lives in a persistent, encrypted rclone config rather than
+  # in environment variables, because the backend must be able to WRITE the
+  # rotated JWT back. That write is what avoids ever needing a second 2FA code.
+  local cfg="${RCLONE_CONFIG:-/state/rclone.conf}"
+  if [ ! -s "$cfg" ]; then
+    die "no rclone config at ${cfg}; run /phase0/bootstrap-auth.sh once (this is the only step that needs a 2FA code)"
   fi
-  # Two viable auth shapes, and neither is email+password alone:
-  #
-  #  (a) OTP_SECRET_KEY set — the TOTP seed. rclone generates codes itself and
-  #      can log in from scratch, so re-authentication survives token expiry
-  #      unattended. NOT available in any released rclone today; the check is
-  #      here so this starts working the day upstream ships it, without
-  #      depending on an unmerged branch in the meantime.
-  #  (b) MNEMONIC + TOKEN set — captured from a one-time interactive login.
-  #      Works until the token expires, then needs a human with an authenticator.
-  #
-  # Catch a missing one here rather than three hours into T2.
-  if [ -z "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
-    if [ -z "${RCLONE_CONFIG_INTERNXT_MNEMONIC:-}" ] || [ -z "${RCLONE_CONFIG_INTERNXT_TOKEN:-}" ]; then
-      die "set RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY (preferred, survives token expiry), or MNEMONIC and _TOKEN together; run /phase0/bootstrap-auth.sh"
-    fi
-    warn "no OTP secret configured: this session cannot re-authenticate unattended and will stop when the token expires"
+  if grep -q 'RCLONE_ENCRYPT_V0' "$cfg" 2>/dev/null; then
+    [ -n "${RCLONE_CONFIG_PASS:-}" ] \
+      || die "RCLONE_CONFIG_PASS is unset but ${cfg} is encrypted"
+  else
+    die "${cfg} is not encrypted; it holds the account password and the E2E mnemonic. Re-run /phase0/bootstrap-auth.sh"
   fi
+  # Losing write access silently reinstates the 2FA requirement on the next
+  # token expiry, so treat it as a hard failure rather than a warning.
+  [ -w "$(dirname "$cfg")" ] \
+    || die "$(dirname "$cfg") is not writable; rclone could not persist a rotated token and would fall back to a login needing 2FA"
 }
 
-# Does this rclone understand the TOTP seed option?
-has_totp_support() {
-  rclone help backend internxt 2>/dev/null | grep -q 'otp-secret-key'
-}
 
-# rclone reports an expired or rejected session as a request to reconnect.
-# With 2FA enabled there is no unattended way to satisfy that, so it is worth
-# distinguishing from an ordinary transport failure — it is a different
-# problem with a different fix.
+# rclone reports a session it cannot refresh as a request to reconnect. That
+# should be rare now that rotated tokens persist — it means the token aged out
+# entirely, past the point the refresh endpoint will renew it. Worth
+# distinguishing from an ordinary transport failure: the fix is a bootstrap
+# re-run, not a retry.
 is_auth_expired() { # is_auth_expired <file>
   [ -f "$1" ] || return 1
   grep -qiE 'config reconnect|empty token found|failed to get token|mnemonic is required' "$1"
@@ -122,7 +118,7 @@ check_auth_expiry() {
     if is_auth_expired "$f"; then hit="$(basename "$f")"; break; fi
   done
   [ -n "$hit" ] || return 0
-  record AUTH FAIL "session expired mid-run (first seen in ${hit}); with 2FA enabled rclone cannot re-authenticate unattended — see docs/manual-testing.md"
+  record AUTH FAIL "session could not be refreshed (first seen in ${hit}) — the token aged past the refresh window. Re-run /phase0/bootstrap-auth.sh and check the config is writable"
   return 1
 }
 

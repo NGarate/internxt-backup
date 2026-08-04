@@ -43,20 +43,33 @@ t0() {
   fi
   record T0 PASS "rclone exposes the internxt backend"
 
-  # An account with 2FA cannot re-authenticate headlessly on the stock build.
-  # Report which situation this run is actually in, so a later expiry is
-  # explicable rather than mysterious.
-  if has_totp_support; then
-    if [ -n "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
-      record T0 PASS "TOTP seed configured — re-authentication is unattended"
-    else
-      record T0 WARN "rclone supports otp_secret_key but none is set; expiry will still need a human"
-    fi
-  elif [ -n "${RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY:-}" ]; then
-    record T0 FAIL "OTP secret is set but this rclone release ignores it; it would be silently unused"
-    return 1
+  # Token rotation is what keeps 2FA out of the picture, and it only works if
+  # rclone can write the rotated JWT back to its config. Verify that here
+  # rather than discovering it as a login prompt days into a seed.
+  local cfg="${RCLONE_CONFIG:-/state/rclone.conf}"
+  if [ -w "$(dirname "$cfg")" ] && [ -w "$cfg" ]; then
+    record T0 PASS "rclone config is writable — refreshed tokens will persist, so no further 2FA codes"
   else
-    record T0 WARN "released rclone has no unattended re-auth for 2FA accounts; this run works until the token expires"
+    record T0 FAIL "rclone config at ${cfg} is not writable; every refreshed token would be discarded and the next expiry would demand a 2FA code"
+    return 1
+  fi
+
+  # Record the stored token's own expiry. It is a plain JWT, so the deadline is
+  # readable without contacting anyone — this turns "how long do we have?" from
+  # a guess into a number.
+  local exp
+  exp=$(rclone config dump 2>/dev/null \
+        | jq -r --arg r "$PHASE0_REMOTE" '.[$r].token // empty' \
+        | jq -r '.access_token // .AccessToken // empty' 2>/dev/null \
+        | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null \
+        | jq -r '.exp // empty' 2>/dev/null)
+  if [ -n "$exp" ]; then
+    local now=$(( $(date +%s) )) left
+    left=$(( (exp - now) / 3600 ))
+    echo "$exp" > "${OUT}/token-exp.txt"
+    record T0 INFO "stored token expires in ~${left}h ($(date -u -d "@${exp}" +%Y-%m-%dT%H:%M:%SZ))"
+  else
+    record T0 INFO "could not read the token expiry from config; expiry will be observed rather than predicted"
   fi
 
   # About() is implemented by this backend, which is what makes T6 measurable.

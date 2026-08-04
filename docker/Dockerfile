@@ -135,11 +135,25 @@ RUN set -eux; \
     # and stays correct however the account ends up being named.
     chown -R 1000:1000 /state /cache /out
 
-# No secrets are baked in, and none are read from disk at run time.
-# RCLONE_CONFIG=/dev/null guarantees rclone never reads or writes a config
-# file; the remote is defined entirely by RCLONE_CONFIG_<NAME>_<KEY> vars,
-# and restic forwards its environment to the rclone child unmodified.
-ENV RCLONE_CONFIG=/dev/null \
+# rclone needs a WRITABLE config, and that is not a compromise — it is the
+# mechanism that avoids 2FA entirely.
+#
+# The internxt backend refreshes its JWT via a RefreshToken endpoint that
+# needs no 2FA code, then persists the rotated token with oauthutil.PutToken.
+# Only if that refresh itself 401s does it fall back to a full re-login, which
+# does need a code. Pointing RCLONE_CONFIG at /dev/null threw the rotated
+# token away every time, guaranteeing the 2FA path we were trying to avoid.
+#
+# So the config is a real file, encrypted at rest with RCLONE_CONFIG_PASS
+# supplied from the environment. A stolen disk or a leaked /Volume1 snapshot
+# yields ciphertext; the passphrase never touches storage. Verified that
+# rclone reads AND writes an encrypted config non-interactively with only the
+# env passphrase, and that it stays encrypted afterwards.
+#
+# The restic passphrase is unaffected and remains environment-only: it is the
+# secret whose disclosure would expose backup contents, and whose loss is
+# unrecoverable. rclone only ever sees restic-encrypted blobs.
+ENV RCLONE_CONFIG=/state/rclone.conf \
     RESTIC_CACHE_DIR=/cache/restic \
     TMPDIR=/cache/tmp \
     INTERNXT_BACKUP_STATE_DIR=/state

@@ -111,21 +111,60 @@ else
   echo "  skip unwritable-dir check (running as root)"
 fi
 
-# --- secret hygiene: the security-relevant guards ------------------------
-for stray in state/restic-password state/rclone.conf config/rclone.conf config/restic-password; do
-  r=$(fresh "stray-$(basename "$stray")")
+# --- the restic passphrase must never be on disk -------------------------
+# Its disclosure exposes every backup and its loss is unrecoverable.
+for stray in state/restic-password config/restic-password; do
+  r=$(fresh "stray-$(basename "$(dirname "$stray")")")
   printf 'hunter2\n' > "$r/$stray"
   out=$(run "$r" "" daemon); rc=$?
-  check "secret at $stray refuses startup" 78 "$rc" "secret file present" "$out"
+  check "restic passphrase at $stray refuses startup" 78 "$rc" "passphrase found on disk" "$out"
 done
 
-# --- RCLONE_CONFIG pointing at a real file -------------------------------
-r=$(fresh realconf); printf '[internxt]\ntype = internxt\npass = xyz\n' > "$r/rclone.conf"
-out=$(env PATH="$TMP/bin:/usr/bin:/bin" \
-      INTERNXT_BACKUP_STATE_DIR="$r/state" INTERNXT_BACKUP_CACHE_DIR="$r/cache" \
-      INTERNXT_BACKUP_CONFIG_DIR="$r/config" RCLONE_CONFIG="$r/rclone.conf" \
-      sh "$EP" daemon 2>&1); rc=$?
-check "RCLONE_CONFIG pointing at a real file is rejected" 78 "$rc" "credentials belong in" "$out"
+# --- the rclone config is a real file, but must be encrypted -------------
+# It has to be writable so the backend can persist rotated JWTs; that
+# rotation is precisely what avoids needing a 2FA code. Plaintext is the
+# failure mode to catch, since it holds the account password and the
+# end-to-end encryption mnemonic.
+withcfg() { # withcfg <root> <config-path> [extra env...]
+  local root=$1 cfg=$2; shift 2
+  env PATH="${TMP}/bin:/usr/bin:/bin" \
+      INTERNXT_BACKUP_STATE_DIR="$root/state" \
+      INTERNXT_BACKUP_CACHE_DIR="$root/cache" \
+      INTERNXT_BACKUP_CONFIG_DIR="$root/config" \
+      RCLONE_CONFIG="$cfg" "$@" \
+      sh "$EP" daemon 2>&1
+}
+
+r=$(fresh plainconf)
+printf '[internxt]\ntype = internxt\npass = xyz\nmnemonic = abandon ability\n' > "$r/state/rclone.conf"
+out=$(withcfg "$r" "$r/state/rclone.conf"); rc=$?
+check "plaintext rclone config is rejected" 78 "$rc" "is not encrypted" "$out"
+
+r=$(fresh encconf)
+printf '# Encrypted rclone configuration File\n\nRCLONE_ENCRYPT_V0:\nGW32BvAHO3Su\n' > "$r/state/rclone.conf"
+out=$(withcfg "$r" "$r/state/rclone.conf" RCLONE_CONFIG_PASS=secret123); rc=$?
+check "encrypted config plus passphrase starts" 0 "$rc" "supervisor:daemon" "$out"
+
+out=$(withcfg "$r" "$r/state/rclone.conf"); rc=$?
+check "encrypted config without RCLONE_CONFIG_PASS is rejected" 78 "$rc" "RCLONE_CONFIG_PASS is unset" "$out"
+
+# Without a writable config dir every rotated token is discarded, which
+# silently reinstates the 2FA requirement on the next expiry.
+if [ "$(id -u)" != "0" ]; then
+  r=$(fresh rocfgdir); mkdir -p "$r/ro"
+  printf '# Encrypted rclone configuration File\nRCLONE_ENCRYPT_V0:\nx\n' > "$r/ro/rclone.conf"
+  chmod 0500 "$r/ro"
+  out=$(withcfg "$r" "$r/ro/rclone.conf" RCLONE_CONFIG_PASS=secret123); rc=$?
+  chmod 0700 "$r/ro"
+  check "unwritable config dir is rejected" 78 "$rc" "persist rotated tokens" "$out"
+else
+  echo "  skip unwritable-config-dir check (running as root)"
+fi
+
+# A missing config is fine: bootstrap-auth.sh creates it on first run.
+r=$(fresh nocfg)
+out=$(withcfg "$r" "$r/state/rclone.conf" RCLONE_CONFIG_PASS=secret123); rc=$?
+check "absent config does not block startup" 0 "$rc" "supervisor:daemon" "$out"
 
 echo
 printf '%d passed, %d failed\n' "$pass" "$fail"

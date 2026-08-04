@@ -105,34 +105,33 @@ is_auth_expired "$TMP/does-not-exist.err"; rc_is "missing file is not auth expir
 
 echo
 echo "require_secrets guard:"
+mkcfg() { # mkcfg <root> <encrypted|plain>
+  local d="$TMP/$1"; rm -rf "$d"; mkdir -p "$d"
+  if [ "$2" = encrypted ]; then
+    printf '# Encrypted rclone configuration File\n\nRCLONE_ENCRYPT_V0:\nabc\n' > "$d/rclone.conf"
+  else
+    printf '[internxt]\ntype = internxt\npass = xyz\n' > "$d/rclone.conf"
+  fi
+  echo "$d/rclone.conf"
+}
+c_enc=$(mkcfg cfg-enc encrypted)
+c_plain=$(mkcfg cfg-plain plain)
+
 ( unset RESTIC_PASSWORD RESTIC_PASSWORD_COMMAND
-  export RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
-  require_secrets ) >/dev/null 2>&1; rc_is "rejects a missing key" 1 $?
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
-  require_secrets ) >/dev/null 2>&1; rc_is "accepts RESTIC_PASSWORD" 0 $?
-( export RESTIC_PASSWORD_COMMAND="echo x" RCLONE_CONFIG_INTERNXT_TYPE=internxt RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
-  require_secrets ) >/dev/null 2>&1; rc_is "accepts RESTIC_PASSWORD_COMMAND (tier 2/3)" 0 $?
-( export RESTIC_PASSWORD=x; unset RCLONE_CONFIG_INTERNXT_TYPE
-  require_secrets ) >/dev/null 2>&1; rc_is "rejects an undefined remote" 1 $?
+  export RCLONE_CONFIG="$c_enc" RCLONE_CONFIG_PASS=p
+  require_secrets ) >/dev/null 2>&1; rc_is "rejects a missing restic key" 1 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG="$c_enc" RCLONE_CONFIG_PASS=p
+  require_secrets ) >/dev/null 2>&1; rc_is "accepts encrypted config + both passphrases" 0 $?
+( export RESTIC_PASSWORD_COMMAND="echo x" RCLONE_CONFIG="$c_enc" RCLONE_CONFIG_PASS=p
+  unset RESTIC_PASSWORD
+  require_secrets ) >/dev/null 2>&1; rc_is "accepts RESTIC_PASSWORD_COMMAND" 0 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG="$c_enc"; unset RCLONE_CONFIG_PASS
+  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS encrypted config with no RCLONE_CONFIG_PASS" 1 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG="$c_plain" RCLONE_CONFIG_PASS=p
+  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS a plaintext config" 1 $?
+( export RESTIC_PASSWORD=x RCLONE_CONFIG="$TMP/nope/rclone.conf" RCLONE_CONFIG_PASS=p
+  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS a missing config (bootstrap not run)" 1 $?
 
-# Two viable auth shapes; email+password alone is never one of them.
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
-         RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY=seed
-  unset RCLONE_CONFIG_INTERNXT_MNEMONIC RCLONE_CONFIG_INTERNXT_TOKEN
-  require_secrets ) >/dev/null 2>&1; rc_is "accepts a TOTP seed alone" 0 $?
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
-         RCLONE_CONFIG_INTERNXT_MNEMONIC=m RCLONE_CONFIG_INTERNXT_TOKEN=t
-  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY
-  require_secrets ) >/dev/null 2>&1; rc_is "accepts mnemonic+token together" 0 $?
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt
-  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY RCLONE_CONFIG_INTERNXT_MNEMONIC RCLONE_CONFIG_INTERNXT_TOKEN
-  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS email+password alone" 1 $?
-( export RESTIC_PASSWORD=x RCLONE_CONFIG_INTERNXT_TYPE=internxt \
-         RCLONE_CONFIG_INTERNXT_MNEMONIC=m
-  unset RCLONE_CONFIG_INTERNXT_OTP_SECRET_KEY RCLONE_CONFIG_INTERNXT_TOKEN
-  require_secrets ) >/dev/null 2>&1; rc_is "REJECTS a half-configured mnemonic/token pair" 1 $?
-
-echo
 echo "record + report:"
 : > "$VERDICTS"
 record TX PASS "something worked"

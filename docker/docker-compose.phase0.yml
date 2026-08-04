@@ -29,10 +29,15 @@ services:
       # Secrets are NOT set here. A compose file is not a secret store: it gets
       # copied, backed up, rendered in Docker Manager's UI, and surfaced by
       # `docker inspect`. Export them into your shell and pass them per-exec:
-      #   docker compose ... exec -e RESTIC_PASSWORD="$KEY" phase0 sh
+      #   docker compose ... exec -e RESTIC_PASSWORD="$KEY" \
+      #                          -e RCLONE_CONFIG_PASS="$CFGPASS" phase0 sh
       # See docs/security.md.
-      RCLONE_CONFIG: /dev/null
-      RCLONE_CONFIG_INTERNXT_TYPE: internxt
+      #
+      # A real, writable config — deliberately not /dev/null. The internxt
+      # backend persists rotated JWTs here, and that is what keeps 2FA to a
+      # single bootstrap instead of every expiry. It is encrypted at rest;
+      # RCLONE_CONFIG_PASS never touches storage.
+      RCLONE_CONFIG: /state/rclone.conf
 
     volumes:
       # Everything persistent lives under a user-created share. Only /Volume1
