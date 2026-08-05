@@ -465,10 +465,13 @@ t9() {
   [ $rc -eq 12 ] && record T9 PASS "wrong password exits 12" \
                  || record T9 WARN "wrong password exited ${rc}, expected 12"
 
+  # ALL sources missing is fatal (1), not a partial. restic only reports 3 when
+  # SOME of the tree was readable — which is the distinction the taxonomy needs:
+  # "a few files were locked" is routine, "the share is not mounted" is not.
   r backup /data/definitely-not-here --json >"${OUT}/t9-nosrc.log" 2>&1
   rc=$?
-  [ $rc -eq 3 ] && record T9 PASS "missing source path exits 3" \
-                || record T9 WARN "missing source exited ${rc}, expected 3 on restic >= 0.19"
+  [ $rc -eq 1 ] && record T9 PASS "all sources missing exits 1 (fatal, not partial)" \
+                || record T9 WARN "all-sources-missing exited ${rc}, expected 1"
 }
 
 # =========================================================================

@@ -70,32 +70,37 @@ config stays writable — see [How login works](#how-login-works).
 
 ## Quick start
 
-Requires Docker on the NAS. Full detail in [docs/manual-testing.md][mt].
+Requires Docker on the NAS. `docker/nas.sh` wraps everything; run it over SSH
+from a checkout.
 
 ```bash
-# 1. build
-docker build -f docker/Dockerfile --target phase0 -t internxt-backup:phase0 .
-
-# 2. smoke test — no credentials needed
-docker run --rm --entrypoint sh internxt-backup:phase0 -c \
-  'id; rclone version | head -1; restic version; rclone help backends | grep -w internxt'
-
-# 3. authenticate once (the only step needing a 2FA code)
-read -rs CFGPASS
-docker compose -f docker/docker-compose.phase0.yml up -d
-docker compose -f docker/docker-compose.phase0.yml exec -it \
-  -e RCLONE_CONFIG_PASS="$CFGPASS" phase0 /phase0/bootstrap-auth.sh
-
-# 4. prove the transport before trusting it with 4 TB
-read -rs RESTIC_KEY
-docker compose -f docker/docker-compose.phase0.yml exec \
-  -e RESTIC_PASSWORD="$RESTIC_KEY" -e RCLONE_CONFIG_PASS="$CFGPASS" \
-  phase0 /phase0/phase0.sh all
+./docker/nas.sh check      # environment: docker, arch, AVX2, RAM, disk
+./docker/nas.sh build
+./docker/nas.sh selftest   # restic end-to-end — no credentials, no network
+./docker/nas.sh up
+./docker/nas.sh smoke      # container startup guards
+./docker/nas.sh auth       # one-time Internxt login; the only 2FA prompt
+./docker/nas.sh phase0 t0  # then t1, t9, and finally: phase0 all
 ```
 
-> 🔴 **Escrow the restic passphrase before step 4.** It lives nowhere on the
-> machine, so an un-escrowed repository is unrecoverable from the moment it is
-> created. See [Escrow][sec-escrow].
+Run `selftest` first. It exercises the whole restic path — init, backup,
+incremental dedup, restore, byte-exact comparison, `check --read-data`, prune,
+and the exit codes — against a repository inside the container. Nothing leaves
+the machine and no credentials are involved. If it fails, the transport is not
+the problem, and Phase 0 would spend hours proving that.
+
+Paths default to a stock TOS 6 layout and are overridable:
+
+```bash
+IB_APPDATA=/Volume1/appdata/internxt-backup   # persistent state
+IB_SOURCE=/Volume1/Photos                     # the sample Phase 0 measures with
+```
+
+> 🔴 **Escrow the restic passphrase before Phase 0 creates a repository.** It
+> lives nowhere on the machine, so an un-escrowed repository is unrecoverable
+> from the moment it exists. See [Escrow][sec-escrow].
+
+Full detail in [docs/manual-testing.md][mt].
 
 [mt]: docs/manual-testing.md
 [sec-escrow]: docs/security.md#escrow--the-highest-severity-requirement

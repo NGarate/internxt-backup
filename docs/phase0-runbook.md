@@ -89,7 +89,7 @@ Re-running a single test is safe and idempotent.
 | `t6` | whether deleting actually reclaims quota, or lands in trash                | design-determining, not blocking    |
 | `t7` | a second concurrent run exits 11 (repo locked)                             | informative                         |
 | `t8` | backup works under `--append-only` and prune is refused                    | validates the two-profile model     |
-| `t9` | missing repo → 10, wrong password → 12, missing source → 3                 | feeds the exit-code taxonomy        |
+| `t9` | missing repo → 10, wrong password → 12, all sources missing → 1            | feeds the exit-code taxonomy        |
 
 ```bash
 /phase0/phase0.sh t2        # just the throughput measurement

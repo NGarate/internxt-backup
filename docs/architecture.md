@@ -163,10 +163,13 @@ instead of parsing prose. `src/runtime/run-failure.ts`.
 | 12    | scan failed       |     | 21    | provider error     |
 | 13/14 | upload / download |     |       |                    |
 
-restic's own codes map onto these: 3 splits into `source-unreadable` (a routine
-partial) versus `source-missing` (an emergency), disambiguated by preflight
-rather than by parsing restic's output; 10/11/12 become repo-missing,
-repo-locked and wrong-password; 130 is the clean bandwidth-window stop.
+restic's own codes map onto these. It already draws the distinction that
+matters: **1** when every source path is missing (`Fatal: all source
+directories/files do not exist` — the unmounted-share emergency) versus **3**
+when only part of the tree was unreadable (a routine partial). Preflight's
+sanity band catches the emergency before restic runs; this is the backstop.
+10/11/12 become repo-missing, repo-locked and wrong-password, and 130 is the
+clean bandwidth-window stop.
 
 ---
 
