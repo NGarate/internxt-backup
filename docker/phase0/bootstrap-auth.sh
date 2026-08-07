@@ -100,8 +100,22 @@ rclone config dump 2>/dev/null | grep -q "\"${REMOTE}\"" || {
 
 echo "  Verifying..." >&2
 if ! rclone about "${REMOTE}:" --json >/dev/null 2>"$cfg_dir/.bootstrap.err"; then
-  echo "bootstrap: authentication did not succeed:" >&2
-  sed 's/^/    /' "$cfg_dir/.bootstrap.err" >&2
+  if grep -qiE 'not allowed for this user tier|status 402' "$cfg_dir/.bootstrap.err"; then
+    cat >&2 <<'EOF'
+
+bootstrap: Internxt returned 402 — this account's plan is not entitled to
+rclone access. The password and 2FA code were accepted; the plan was not.
+
+Nothing here can work around a billing decision. internxt.com/pricing lists
+rclone support on all three current paid tiers, so if this is a legacy or
+lifetime plan it is likely a mapping problem — ask hello@internxt.com to
+enable it, quoting the 402.
+
+EOF
+  else
+    echo "bootstrap: authentication did not succeed:" >&2
+    sed 's/^/    /' "$cfg_dir/.bootstrap.err" >&2
+  fi
   rm -f "$cfg_dir/.bootstrap.err"
   exit 1
 fi

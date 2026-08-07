@@ -76,7 +76,10 @@ t0() {
   # Capture it before anything else touches the account.
   quota_snapshot t0
   if [ -z "$(quota_used t0)" ]; then
-    if is_auth_expired "${OUT}/quota-t0.err"; then
+    if is_tier_blocked "${OUT}/quota-t0.err"; then
+      record T0 FAIL "account plan is not entitled to rclone (HTTP 402) — a billing decision, not a credential problem"
+      explain_tier_block
+    elif is_auth_expired "${OUT}/quota-t0.err"; then
       record T0 FAIL "session token rejected — re-run /phase0/bootstrap-auth.sh (2FA cannot be satisfied unattended)"
     else
       record T0 FAIL "rclone about failed — check credentials and account entitlement"

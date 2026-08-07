@@ -110,6 +110,41 @@ is_auth_expired() { # is_auth_expired <file>
   grep -qiE 'config reconnect|empty token found|failed to get token|mnemonic is required' "$1"
 }
 
+# HTTP 402 is Internxt refusing the account's plan, not refusing the password.
+# Worth separating: no amount of retrying, re-authenticating or reconfiguring
+# fixes a billing decision, and the fix is a support ticket or a different
+# provider.
+is_tier_blocked() { # is_tier_blocked <file>
+  [ -f "$1" ] || return 1
+  grep -qiE 'not allowed for this user tier|status 402|402 payment required' "$1"
+}
+
+explain_tier_block() {
+  cat >&2 <<'EOF'
+
+    Internxt returned 402 Payment Required: the account's plan is not
+    entitled to rclone access. This is a billing decision on their side —
+    the credentials are fine and nothing here can work around it.
+
+    Worth knowing before you pay for anything:
+
+      * internxt.com/pricing currently lists "CLI & WebDAV support" and
+        "NAS & Rclone support" on ALL THREE paid tiers (Essential 1TB,
+        Premium 3TB, Ultimate 5TB).
+      * Legacy and lifetime plans are not in that lineup, and have been
+        refused before — see internxt/cli issues #384 and #509.
+
+    So if this is a legacy or lifetime plan, it looks like a mapping problem
+    rather than a missing purchase. Ask hello@internxt.com to enable rclone
+    on the account, quoting the 402 and your plan.
+
+    A useful data point to include: whether their own CLI works. If
+    `internxt whoami` succeeds while rclone returns 402, the entitlement is
+    inconsistent rather than absent, which is a much easier ticket.
+
+EOF
+}
+
 # Scan every captured stderr for auth expiry and record it once.
 check_auth_expiry() {
   local hit=""

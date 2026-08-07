@@ -104,6 +104,17 @@ is_auth_expired "$f"; rc_is "does NOT flag an ordinary transport error" 1 $?
 is_auth_expired "$TMP/does-not-exist.err"; rc_is "missing file is not auth expiry" 1 $?
 
 echo
+echo "is_tier_blocked (HTTP 402 — a billing decision, not a credential problem):"
+f=$(mk tier402 '2026/08/07 20:15:42 NOTICE: Fatal error: login failed: failed to access: access: rclone access not allowed for this user tier (status 402)')
+is_tier_blocked "$f"; rc_is "detects the real 402 string" 0 $?
+# Must NOT be classified as an expiry: re-authenticating cannot fix a plan.
+is_auth_expired "$f"; rc_is "does NOT mistake it for token expiry" 1 $?
+f=$(mk recon2 'CRITICAL: failed to get token - please run: rclone config reconnect')
+is_tier_blocked "$f"; rc_is "does NOT flag an ordinary expiry as a tier block" 1 $?
+f=$(mk plain2 'connection reset by peer')
+is_tier_blocked "$f"; rc_is "does NOT flag a transport error" 1 $?
+
+echo
 echo "require_secrets guard:"
 mkcfg() { # mkcfg <root> <encrypted|plain>
   local d="$TMP/$1"; rm -rf "$d"; mkdir -p "$d"
