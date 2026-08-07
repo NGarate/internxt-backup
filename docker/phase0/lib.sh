@@ -122,25 +122,31 @@ is_tier_blocked() { # is_tier_blocked <file>
 explain_tier_block() {
   cat >&2 <<'EOF'
 
-    Internxt returned 402 Payment Required: the account's plan is not
-    entitled to rclone access. This is a billing decision on their side —
-    the credentials are fine and nothing here can work around it.
+    Internxt returned 402: the account is not entitled to rclone access.
+    The credentials are fine — this is an account flag on their side, and
+    nothing here can work around it.
 
-    Worth knowing before you pay for anything:
+    IMPORTANT: rclone is a SEPARATE entitlement from the Internxt CLI.
+    Having the CLI enabled does not enable rclone.
 
-      * internxt.com/pricing currently lists "CLI & WebDAV support" and
-        "NAS & Rclone support" on ALL THREE paid tiers (Essential 1TB,
-        Premium 3TB, Ultimate 5TB).
-      * Legacy and lifetime plans are not in that lineup, and have been
-        refused before — see internxt/cli issues #384 and #509.
+    From Internxt's own adapter (github.com/internxt/rclone-adapter,
+    config/config.go), both clients POST to the same endpoint:
 
-    So if this is a legacy or lifetime plan, it looks like a mapping problem
-    rather than a missing purchase. Ask hello@internxt.com to enable rclone
-    on the account, quoting the 402 and your plan.
+        /auth/cli/login/access
 
-    A useful data point to include: whether their own CLI works. If
-    `internxt whoami` succeeds while rclone returns 402, the entitlement is
-    inconsistent rather than absent, which is a much easier ticket.
+    and are told apart only by an HTTP header:
+
+        internxt-cli      the Internxt CLI      ClientName in @internxt/cli
+        rclone-adapter    rclone                ClientName in rclone-adapter
+
+    The server authorises per client name. So `internxt whoami` succeeding
+    while rclone returns 402 is not a contradiction — it means the
+    `internxt-cli` flag is set on the account and `rclone-adapter` is not.
+
+    That makes for a precise ticket to hello@internxt.com: ask them to
+    enable the `rclone-adapter` client, not "rclone" in the abstract. Others
+    hit the same wall in internxt/cli issues #384 and #459; in both cases
+    support resolved it account-side.
 
 EOF
 }
